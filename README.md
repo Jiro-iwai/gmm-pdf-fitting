@@ -241,6 +241,8 @@ gmm-pdf-fitting/
 | `n_init` | 初期化の試行回数 | 8 |
 | `init` | 初期化方法 ("quantile", "random", "qmi", "wqmi") | "quantile" |
 | `use_moment_matching` | モーメント一致QP投影を使用するか | false |
+| `qp_mode` | QP制約モード ("hard": 厳密一致、"soft": ペナルティ付き近似) | "hard" |
+| `soft_lambda` | ソフト制約のペナルティ係数（大きいほどモーメント一致を重視） | 1e4 |
 
 #### LP方式固有のパラメータ
 
