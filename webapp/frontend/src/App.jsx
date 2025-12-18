@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Container, Box, Typography, Paper, IconButton, Tooltip } from '@mui/material'
 import Brightness4Icon from '@mui/icons-material/Brightness4'
 import Brightness7Icon from '@mui/icons-material/Brightness7'
@@ -6,29 +6,56 @@ import ParameterForm from './components/ParameterForm'
 import ResultDisplay from './components/ResultDisplay'
 import './App.css'
 
+const PLOT_SETTINGS_KEY = 'gmm-fitting-plot-settings'
+
+const defaultPlotSettings = {
+  scaleMode: 'linear',
+  xRangeMin: null,
+  xRangeMax: null,
+  yRangeLinearMin: null,
+  yRangeLinearMax: null,
+  yRangeLogMin: null,
+  yRangeLogMax: null,
+  showGridPoints: true,
+  showGmmComponents: false,
+  truePdfColor: '#1f77b4',
+  gmmColor: '#d62728',
+  gridColor: '#1f77b4',
+  lineWidth: 2,
+  gridPointSize: 5,
+  truePdfLineStyle: 'solid',
+  gmmLineStyle: 'dash',
+}
+
+// Load saved plot settings from localStorage
+const loadSavedPlotSettings = () => {
+  try {
+    const saved = localStorage.getItem(PLOT_SETTINGS_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return { ...defaultPlotSettings, ...parsed }
+    }
+  } catch (e) {
+    console.warn('Failed to load saved plot settings:', e)
+  }
+  return defaultPlotSettings
+}
+
 function App({ toggleColorMode, mode }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  // Plot settings state - persist across result changes
-  const [plotSettings, setPlotSettings] = useState({
-    scaleMode: 'linear',
-    xRangeMin: null,
-    xRangeMax: null,
-    yRangeLinearMin: null,
-    yRangeLinearMax: null,
-    yRangeLogMin: null,
-    yRangeLogMax: null,
-    showGridPoints: true,
-    showGmmComponents: false,
-    truePdfColor: '#1f77b4',
-    gmmColor: '#d62728',
-    gridColor: '#1f77b4',
-    lineWidth: 2,
-    gridPointSize: 5,
-    truePdfLineStyle: 'solid',
-    gmmLineStyle: 'dash',
-  })
+  // Plot settings state - persist across result changes and browser sessions
+  const [plotSettings, setPlotSettings] = useState(loadSavedPlotSettings)
+  
+  // Save plot settings to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(PLOT_SETTINGS_KEY, JSON.stringify(plotSettings))
+    } catch (e) {
+      console.warn('Failed to save plot settings:', e)
+    }
+  }, [plotSettings])
 
   const handleCompute = async (params) => {
     setLoading(true)
