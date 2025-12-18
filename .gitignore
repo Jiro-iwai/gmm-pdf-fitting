@@ -42,3 +42,10 @@ Thumbs.db
 # Web application
 .webapp_pids/
 webapp/temp_plot.png
+
+# Frontend testing
+webapp/frontend/coverage/
+webapp/frontend/.nyc_output/
+
+# Development tools
+.playwright-mcp/

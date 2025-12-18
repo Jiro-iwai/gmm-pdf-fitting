@@ -1,14 +1,19 @@
 """
 Tests for Web Application Frontend components.
 
-Note: These tests require additional setup (Jest, React Testing Library).
-For now, this file serves as a placeholder and documents the testing approach.
+Note: Frontend UI tests are now implemented using Jest and React Testing Library.
+See webapp/frontend/src/components/__tests__/ for the actual test files.
+
+This file serves as a placeholder for pytest and documents that frontend tests
+are run separately using npm test in the webapp/frontend directory.
 """
 
 import pytest
 
-# Frontend tests would typically use Jest and React Testing Library
-# Example test structure (not executable without Jest setup):
+# Frontend tests are implemented in webapp/frontend/src/components/__tests__/
+# Run them with: cd webapp/frontend && npm test
+# 
+# Example test structure (implemented in __tests__ directories):
 
 """
 Example Jest test for ParameterForm component:
