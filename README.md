@@ -1,5 +1,7 @@
 # gmm-pdf-fitting
 
+![Web Application Screenshot](docs/images/screenshot.png)
+
 ガウス混合モデル（GMM）による確率密度関数（PDF）の近似ライブラリ
 
 このプロジェクトは、2変量正規分布の最大値の確率密度関数（PDF）を、ガウス混合モデル（GMM）で近似する実装です。3つのフィッティング方式を提供します：

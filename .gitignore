@@ -29,6 +29,7 @@ htmlcov/
 # Output files
 outputs/
 *.png
+!docs/images/*.png
 *.pdf
 
 # Benchmark results
