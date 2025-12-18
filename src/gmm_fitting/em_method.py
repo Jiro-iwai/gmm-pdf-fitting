@@ -572,11 +572,13 @@ def fit_gmm1d_to_pdf_weighted_em(
     reg_var: float = 1e-6,
     n_init: int = 5,
     seed: int = 0,
-    init: str = "quantile",  # "quantile", "random", "qmi", "wqmi", or "custom"
+    init: str = "quantile",  # "quantile", "random", "qmi", "wqmi", "mdn", or "custom"
     init_params: Optional[Dict] = None,  # Additional parameters for initialization
     use_moment_matching: bool = False,  # Whether to apply moment matching QP projection
     qp_mode: str = "hard",  # "hard" or "soft"
-    soft_lambda: float = 1e4  # Penalty coefficient for soft constraints
+    soft_lambda: float = 1e4,  # Penalty coefficient for soft constraints
+    mdn_model_path: Optional[str] = None,  # Path to MDN model (for init="mdn")
+    mdn_device: str = "auto"  # Device for MDN inference ("cpu", "cuda", or "auto")
 ) -> Tuple[GMM1DParams, float, int]:
     """
     Fit a 1D Gaussian Mixture Model (GMM) to a PDF grid using weighted EM algorithm.
@@ -734,6 +736,71 @@ def fit_gmm1d_to_pdf_weighted_em(
                 gy_noisy = gy
             
             pi, mu, var = _init_gmm_wqmi(z, gx_noisy, gy_noisy, K, sigma_floor_init, mass_floor_init)
+        
+        elif init == "mdn":
+            # MDN initialization: use ML model to predict initial parameters
+            try:
+                from ml_init.infer import MDNInitError, mdn_predict_init
+                import os
+                from pathlib import Path
+                
+                # Determine model path (priority: argument > env var > default)
+                if mdn_model_path is not None:
+                    model_path = Path(mdn_model_path)
+                elif "MDN_MODEL_PATH" in os.environ:
+                    model_path = Path(os.environ["MDN_MODEL_PATH"])
+                else:
+                    # Default path: ./ml_init/checkpoints/mdn_init_v1_N64_K5.pt
+                    model_path = Path("ml_init/checkpoints/mdn_init_v1_N64_K5.pt")
+                
+                # Try MDN prediction
+                try:
+                    mdn_result = mdn_predict_init(
+                        z, f_norm, K=K,
+                        model_path=model_path,
+                        device=mdn_device,
+                        reg_var=reg_var,
+                    )
+                    pi_init = mdn_result["pi"]
+                    mu_init = mdn_result["mu"]
+                    var_init = mdn_result["var"]
+                except MDNInitError:
+                    # Fallback chain: wkmeanspp -> wqmi -> quantile
+                    # Try wkmeanspp first
+                    try:
+                        from ml_init.wkmeanspp import weighted_kmeanspp
+                        w = np.full(len(z), z[1] - z[0])
+                        w[0] = w[-1] = (z[1] - z[0]) / 2
+                        pi_init, mu_init, var_init = weighted_kmeanspp(
+                            z, f_norm, w, K, reg_var=reg_var, max_iter=20
+                        )
+                    except Exception:
+                        # Fallback to wqmi
+                        try:
+                            if init_params and "gx" in init_params and "gy" in init_params:
+                                gx = init_params["gx"]
+                                gy = init_params["gy"]
+                                pi_init, mu_init, var_init = _init_gmm_wqmi(
+                                    z, gx, gy, K, sigma_floor_init, mass_floor_init
+                                )
+                            else:
+                                # Fallback to quantile
+                                pi_init, mu_init, var_init = _init_gmm_quantile(
+                                    z, f_norm, K, sigma_floor_init, mass_floor_init
+                                )
+                        except Exception:
+                            # Final fallback: quantile
+                            pi_init, mu_init, var_init = _init_gmm_quantile(
+                                z, f_norm, K, sigma_floor_init, mass_floor_init
+                            )
+                
+                pi = pi_init
+                mu = mu_init
+                var = var_init
+                
+            except ImportError:
+                # PyTorch not available, fallback to quantile
+                pi, mu, var = _init_gmm_quantile(z, f_norm, K, sigma_floor_init, mass_floor_init)
             
         elif init == "custom":
             # Custom initialization: use provided pi, mu, var
