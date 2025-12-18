@@ -5,9 +5,7 @@ ssta/
 ├── configs/                    # 設定ファイル（JSON）
 │   ├── config_example.json     # 基本的な設定例
 │   ├── config_lp.json         # LP法の設定例
-│   ├── config_moments_example.json  # モーメントモードの設定例
-│   ├── config_test.json        # テスト用設定
-│   └── config_test_no_mm.json  # テスト用設定（モーメントマッチングなし）
+│   └── config_moments_example.json  # モーメントモードの設定例
 │
 ├── examples/                   # 実行例スクリプト
 │   ├── example_pdf_mode.py     # PDF誤差最小化モードの例
@@ -32,9 +30,6 @@ ssta/
 │   ├── moment_em.md            # モーメントマッチングの説明
 │   ├── initial_guess_spec.md   # 初期化方法の仕様
 │   ├── TESTING.md              # テストの説明
-│   ├── answer.md               # 実装仕様の回答
-│   ├── improve_spec.md         # 改善仕様
-│   ├── implementation_questions.md  # 実装に関する質問
 │   ├── kurtosis_error_analysis_report.md  # 尖度誤差分析レポート
 │   └── method_recommendations.md  # 手法推奨事項
 │
