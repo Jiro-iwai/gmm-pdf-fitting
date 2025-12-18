@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 import json
 
-from gmm_fitting import max_pdf_bivariate_normal, normalize_pdf_on_grid
+from src.gmm_fitting import max_pdf_bivariate_normal, normalize_pdf_on_grid
 
 
 # Parameter ranges (hardcoded for reproducibility)
@@ -141,4 +141,38 @@ def _generate_split(
         params_array[i] = [mu_x, sigma_x, mu_y, sigma_y, rho]
     
     return z, f_array, params_array
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Generate MDN training dataset")
+    parser.add_argument("--output_dir", type=str, required=True, help="Output directory for dataset files")
+    parser.add_argument("--n_train", type=int, default=80000, help="Number of training samples")
+    parser.add_argument("--n_val", type=int, default=10000, help="Number of validation samples")
+    parser.add_argument("--n_test", type=int, default=10000, help="Number of test samples")
+    parser.add_argument("--seed_train", type=int, default=0, help="Random seed for training set")
+    parser.add_argument("--seed_val", type=int, default=1, help="Random seed for validation set")
+    parser.add_argument("--seed_test", type=int, default=2, help="Random seed for test set")
+    parser.add_argument("--z_min", type=float, default=-8.0, help="Minimum z value")
+    parser.add_argument("--z_max", type=float, default=8.0, help="Maximum z value")
+    parser.add_argument("--n_points", type=int, default=64, help="Number of grid points")
+    
+    args = parser.parse_args()
+    
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    generate_dataset(
+        output_dir=output_dir,
+        n_train=args.n_train,
+        n_val=args.n_val,
+        n_test=args.n_test,
+        seed_train=args.seed_train,
+        seed_val=args.seed_val,
+        seed_test=args.seed_test,
+        z_min=args.z_min,
+        z_max=args.z_max,
+        n_points=args.n_points,
+    )
 

@@ -740,7 +740,7 @@ def fit_gmm1d_to_pdf_weighted_em(
         elif init == "mdn":
             # MDN initialization: use ML model to predict initial parameters
             try:
-                from ml_init.infer import MDNInitError, mdn_predict_init
+                from src.ml_init.infer import MDNInitError, mdn_predict_init
                 import os
                 from pathlib import Path
                 
@@ -768,7 +768,7 @@ def fit_gmm1d_to_pdf_weighted_em(
                     # Fallback chain: wkmeanspp -> wqmi -> quantile
                     # Try wkmeanspp first
                     try:
-                        from ml_init.wkmeanspp import weighted_kmeanspp
+                        from src.ml_init.wkmeanspp import weighted_kmeanspp
                         w = np.full(len(z), z[1] - z[0])
                         w[0] = w[-1] = (z[1] - z[0]) / 2
                         pi_init, mu_init, var_init = weighted_kmeanspp(
@@ -789,18 +789,28 @@ def fit_gmm1d_to_pdf_weighted_em(
                                     z, f_norm, K, sigma_floor_init, mass_floor_init
                                 )
                         except Exception:
-                            # Final fallback: quantile
-                            pi_init, mu_init, var_init = _init_gmm_quantile(
-                                z, f_norm, K, sigma_floor_init, mass_floor_init
-                            )
+                            # Final fallback: quantile initialization
+                            w_fallback = _grid_weights_from_pdf(z, f_norm)
+                            cdf = np.cumsum(w_fallback)
+                            qs = (np.arange(K) + 0.5) / K
+                            mu_init = np.interp(qs, cdf, z)
+                            mu_init = mu_init + rng.normal(scale=0.05*np.sqrt(var0), size=K)
+                            pi_init = np.ones(K) / K
+                            var_init = np.ones(K) * var0
                 
                 pi = pi_init
                 mu = mu_init
                 var = var_init
                 
             except ImportError:
-                # PyTorch not available, fallback to quantile
-                pi, mu, var = _init_gmm_quantile(z, f_norm, K, sigma_floor_init, mass_floor_init)
+                # PyTorch not available, fallback to quantile initialization
+                w_fallback = _grid_weights_from_pdf(z, f_norm)
+                cdf = np.cumsum(w_fallback)
+                qs = (np.arange(K) + 0.5) / K
+                mu = np.interp(qs, cdf, z)
+                mu = mu + rng.normal(scale=0.05*np.sqrt(var0), size=K)
+                pi = np.ones(K) / K
+                var = np.ones(K) * var0
             
         elif init == "custom":
             # Custom initialization: use provided pi, mu, var
