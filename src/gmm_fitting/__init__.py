@@ -1,0 +1,148 @@
+"""
+GMM Fitting Package
+
+This package provides implementations for fitting Gaussian Mixture Models (GMM)
+to approximate the PDF of max(X, Y) where (X, Y) is bivariate normal.
+
+Modules:
+    em_method: EM algorithm implementation
+    lp_method: LP algorithm implementation
+    gmm_utils: GMM utility functions
+"""
+
+from .em_method import (
+    load_config,
+    prepare_init_params,
+    max_pdf_bivariate_normal,
+    max_pdf_bivariate_normal_decomposed,
+    normalize_pdf_on_grid,
+    fit_gmm1d_to_pdf_weighted_em,
+    gmm1d_pdf,
+    compute_pdf_statistics,
+    plot_pdf_comparison,
+    GMM1DParams,
+    print_section_header,
+    print_subsection_header,
+    print_em_results,
+    print_execution_time,
+    print_moment_matching_info,
+    print_statistics_comparison,
+    print_gmm_parameters,
+    print_plot_output,
+    calc_relative_error,
+    _compute_central_moments,
+    _central_to_raw_moments,
+    _project_moments_qp,
+    DEFAULT_MU_X,
+    DEFAULT_SIGMA_X,
+    DEFAULT_MU_Y,
+    DEFAULT_SIGMA_Y,
+    DEFAULT_RHO,
+    DEFAULT_Z_RANGE,
+    DEFAULT_Z_NPOINTS,
+    DEFAULT_K,
+    DEFAULT_MAX_ITER,
+    DEFAULT_TOL,
+    DEFAULT_REG_VAR,
+    DEFAULT_N_INIT,
+    DEFAULT_SEED,
+    DEFAULT_INIT,
+    DEFAULT_OUTPUT_PATH,
+    DEFAULT_SHOW_GRID_POINTS,
+    DEFAULT_MAX_GRID_POINTS_DISPLAY,
+    DEFAULT_USE_MOMENT_MATCHING,
+    DEFAULT_QP_MODE,
+    DEFAULT_SOFT_LAMBDA,
+)
+
+from .lp_method import (
+    fit_gmm_lp_simple,
+    solve_lp_pdf_rawmoments_linf,
+    solve_lp_pdf_linf,
+    solve_lp_pdf_moments_linf,
+    build_gaussian_dictionary,
+    build_gaussian_dictionary_simple,
+    compute_basis_matrices,
+)
+
+from .gmm_utils import (
+    compute_pdf_raw_moments,
+    compute_errors,
+    compute_gmm_moments_from_weights,
+    compute_component_raw_moments,
+    normal_pdf,
+    pdf_to_cdf_trapz,
+    EPSILON,
+    SIGMA_FLOOR,
+    MASS_FLOOR,
+    VAR_FLOOR,
+    MIN_PDF_VALUE,
+)
+
+__all__ = [
+    # EM method exports
+    'load_config',
+    'prepare_init_params',
+    'max_pdf_bivariate_normal',
+    'max_pdf_bivariate_normal_decomposed',
+    'normalize_pdf_on_grid',
+    'fit_gmm1d_to_pdf_weighted_em',
+    'gmm1d_pdf',
+    'compute_pdf_statistics',
+    'plot_pdf_comparison',
+    'GMM1DParams',
+    'print_section_header',
+    'print_subsection_header',
+    'print_em_results',
+    'print_execution_time',
+    'print_moment_matching_info',
+    'print_statistics_comparison',
+    'print_gmm_parameters',
+    'print_plot_output',
+    'calc_relative_error',
+    '_compute_central_moments',
+    '_central_to_raw_moments',
+    '_project_moments_qp',
+    # Constants
+    'DEFAULT_MU_X',
+    'DEFAULT_SIGMA_X',
+    'DEFAULT_MU_Y',
+    'DEFAULT_SIGMA_Y',
+    'DEFAULT_RHO',
+    'DEFAULT_Z_RANGE',
+    'DEFAULT_Z_NPOINTS',
+    'DEFAULT_K',
+    'DEFAULT_MAX_ITER',
+    'DEFAULT_TOL',
+    'DEFAULT_REG_VAR',
+    'DEFAULT_N_INIT',
+    'DEFAULT_SEED',
+    'DEFAULT_INIT',
+    'DEFAULT_OUTPUT_PATH',
+    'DEFAULT_SHOW_GRID_POINTS',
+    'DEFAULT_MAX_GRID_POINTS_DISPLAY',
+    'DEFAULT_USE_MOMENT_MATCHING',
+    'DEFAULT_QP_MODE',
+    'DEFAULT_SOFT_LAMBDA',
+    # LP method exports
+    'fit_gmm_lp_simple',
+    'solve_lp_pdf_rawmoments_linf',
+    'solve_lp_pdf_linf',
+    'solve_lp_pdf_moments_linf',
+    'build_gaussian_dictionary',
+    'build_gaussian_dictionary_simple',
+    'compute_basis_matrices',
+    # GMM utils exports
+    'compute_pdf_raw_moments',
+    'compute_errors',
+    'compute_gmm_moments_from_weights',
+    'compute_component_raw_moments',
+    'normal_pdf',
+    'pdf_to_cdf_trapz',
+    'EPSILON',
+    'SIGMA_FLOOR',
+    'MASS_FLOOR',
+    'VAR_FLOOR',
+    'MIN_PDF_VALUE',
+]
+

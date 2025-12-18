@@ -1,0 +1,21 @@
+{
+  "mu_x": 0.1,
+  "sigma_x": 0.4,
+  "mu_y": 0.15,
+  "sigma_y": 0.9,
+  "rho": 0.9,
+  "z_range": [-4, 4],
+  "z_npoints": 128,
+  "K": 10,
+  "method": "lp",
+  "L": 5,
+  "objective_mode": "pdf",
+  "lp_params": {
+    "solver": "highs",
+    "sigma_min_scale": 0.1,
+    "sigma_max_scale": 3.0
+  },
+  "output_path": "pdf_comparison_lp",
+  "show_grid_points": true,
+  "max_grid_points_display": 200
+}

@@ -1,0 +1,31 @@
+{
+  "mu_x": 0.05,
+  "sigma_x": 0.4,
+  "mu_y": 0.15,
+  "sigma_y": 0.9,
+  "rho": 0.9,
+  "z_range": [
+    -2,
+    4
+  ],
+  "z_npoints": 128,
+  "K": 10,
+  "L": 10,
+  "method": "lp",
+  "lp_params": {
+    "solver": "highs",
+    "sigma_min_scale": 0.1,
+    "sigma_max_scale": 3.0,
+    "lambda_mean": 1.0,
+    "lambda_variance": 1.0,
+    "lambda_skewness": 1.0,
+    "lambda_kurtosis": 1.0,
+    "pdf_tolerance": 0.011,
+    "max_moment_iter": 100,
+    "moment_tolerance": 1e-6
+  },
+  "objective_mode": "moments",
+  "output_path": "pdf_comparison_lp",
+  "show_grid_points": true,
+  "max_grid_points_display": 200
+}

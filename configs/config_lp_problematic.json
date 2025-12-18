@@ -1,0 +1,22 @@
+{
+  "method": "lp",
+  "K": 15,
+  "L": 10,
+  "z_range": [-2, 4],
+  "z_npoints": 128,
+  "objective_mode": "raw_moments",
+  "lp_params": {
+    "solver": "highs",
+    "sigma_min_scale": 0.1,
+    "sigma_max_scale": 3.0,
+    "pdf_tolerance": 0.001,
+    "lambda_pdf": 1.0,
+    "lambda_raw": [1.0, 1.0, 1.0, 1.0],
+    "objective_form": "B"
+  },
+  "mu_x": 0.1,
+  "sigma_x": 0.4,
+  "mu_y": 0.15,
+  "sigma_y": 0.9,
+  "rho": 0.99
+}

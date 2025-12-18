@@ -1,0 +1,26 @@
+{
+  "mu_x": 0.05,
+  "sigma_x": 0.4,
+  "mu_y": 0.15,
+  "sigma_y": 0.9,
+  "rho": 0.9,
+  "z_range": [
+    -2,
+    4
+  ],
+  "z_npoints": 128,
+  "K": 5,
+  "method": "em",
+  "max_iter": 20000,
+  "tol": 1e-5,
+  "reg_var": 1e-06,
+  "n_init": 4,
+  "seed": 1,
+  "init": "quantile",
+  "use_moment_matching": true,
+  "qp_mode": "hard",
+  "soft_lambda": 1e4,
+  "output_path": "pdf_comparison",
+  "show_grid_points": true,
+  "max_grid_points_display": 200
+}
