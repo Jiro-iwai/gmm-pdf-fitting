@@ -123,7 +123,7 @@ function App({ toggleColorMode, mode }) {
         <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Box>
             <Typography variant="h3" component="h1" gutterBottom>
-              GMM Fitting
+              GMM PDF Fitting
             </Typography>
             <Typography variant="subtitle1" color="text.secondary">
               Approximate PDF of max(X, Y) using Gaussian Mixture Models
