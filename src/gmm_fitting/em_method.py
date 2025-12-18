@@ -674,8 +674,12 @@ def fit_gmm1d_to_pdf_weighted_em(
     sigma_floor_init = init_params.get("sigma_floor", max(reg_var, 1e-12))
     mass_floor_init = init_params.get("mass_floor", 1e-15)
     
+    # Track initialization time
+    total_init_time = 0.0
+    
     # Try multiple random initializations to avoid local optima
     for trial in range(n_init):
+        init_start_time = time.time()
         # -------- Initialization --------
         if init == "quantile":
             # Initialize means at quantiles of the PDF (more stable)
@@ -848,7 +852,10 @@ def fit_gmm1d_to_pdf_weighted_em(
                 var = np.maximum(var, reg_var)
             
         else:
-            raise ValueError(f"init must be 'quantile', 'random', 'qmi', 'wqmi', or 'custom', got '{init}'")
+            raise ValueError(f"init must be 'quantile', 'random', 'qmi', 'wqmi', 'mdn', or 'custom', got '{init}'")
+
+        # Record initialization time for this trial
+        total_init_time += time.time() - init_start_time
 
         prev_ll = -np.inf
 
@@ -949,6 +956,9 @@ def fit_gmm1d_to_pdf_weighted_em(
         
         # Store QP info in a custom attribute (for debugging/output)
         best_params._qp_info = qp_info
+    
+    # Store initialization time in a custom attribute
+    best_params._init_time = total_init_time
     
     return best_params, best_ll, best_iter
 

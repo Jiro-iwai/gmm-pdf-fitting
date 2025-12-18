@@ -140,6 +140,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
         
+        # Get initialization time
+        init_elapsed_time = 0.0
+        if hasattr(params, '_init_time'):
+            init_elapsed_time = params._init_time
+        
         # Subtract QP time from total to get pure EM time
         em_elapsed_time = total_em_time - qp_elapsed_time
         
@@ -323,6 +328,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
         
+        # Get initialization time (for hybrid, init="custom" so should be 0)
+        init_elapsed_time = 0.0
+        if hasattr(params, '_init_time'):
+            init_elapsed_time = params._init_time
+        
         # Subtract QP time from total to get pure EM time
         em_elapsed_time = total_em_time - qp_elapsed_time
         
@@ -386,6 +396,7 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             "em_time": em_elapsed_time,
             "lp_time": lp_elapsed_time if method in ["lp", "hybrid"] else None,
             "qp_time": qp_elapsed_time if qp_elapsed_time > 0 else None,
+            "init_time": init_elapsed_time if method in ["em", "hybrid"] else None,
             "total_time": total_elapsed_time
         },
         "log_likelihood": float(ll_value) if ll_value is not None else None,

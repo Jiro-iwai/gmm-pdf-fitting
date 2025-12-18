@@ -115,6 +115,7 @@ class ExecutionTime(BaseModel):
     em_time: Optional[float] = None
     lp_time: Optional[float] = None
     qp_time: Optional[float] = None
+    init_time: Optional[float] = None
     total_time: float
 
 
