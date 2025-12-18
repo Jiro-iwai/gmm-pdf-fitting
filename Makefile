@@ -23,7 +23,11 @@ test: ## Run all tests (Python + Frontend)
 	$(PYTEST) $(TEST_DIR)
 	@echo ""
 	@echo "Running frontend tests..."
-	@cd webapp/frontend && npm test -- --watchAll=false || (echo "Frontend tests failed. Make sure dependencies are installed: cd webapp/frontend && npm install" && exit 1)
+	@if [ ! -d "webapp/frontend/node_modules" ]; then \
+		echo "Frontend dependencies not installed. Installing..."; \
+		cd webapp/frontend && npm install; \
+	fi
+	@cd webapp/frontend && npm test -- --watchAll=false || (echo "Frontend tests failed." && exit 1)
 	@echo ""
 	@echo "All tests passed!"
 
@@ -33,6 +37,10 @@ test-python: ## Run Python tests only
 
 test-frontend: ## Run frontend tests only
 	@echo "Running frontend tests..."
+	@if [ ! -d "webapp/frontend/node_modules" ]; then \
+		echo "Frontend dependencies not installed. Installing..."; \
+		cd webapp/frontend && npm install; \
+	fi
 	@cd webapp/frontend && npm test -- --watchAll=false
 
 test-all: test ## Alias for test (runs all tests)
@@ -50,7 +58,11 @@ test-cov-all: ## Run all tests with coverage reports
 	$(PYTEST) $(TEST_DIR) --cov=$(COV_MODULE) --cov-report=$(COV_REPORT)
 	@echo ""
 	@echo "Running frontend tests with coverage report..."
-	@cd webapp/frontend && npm run test:coverage || (echo "Frontend tests failed. Make sure dependencies are installed: cd webapp/frontend && npm install" && exit 1)
+	@if [ ! -d "webapp/frontend/node_modules" ]; then \
+		echo "Frontend dependencies not installed. Installing..."; \
+		cd webapp/frontend && npm install; \
+	fi
+	@cd webapp/frontend && npm run test:coverage || (echo "Frontend tests failed." && exit 1)
 
 test-cov-html: ## Run tests and generate HTML coverage report
 	@echo "Running tests and generating HTML coverage report..."
