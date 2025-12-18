@@ -50,3 +50,7 @@ webapp/frontend/.nyc_output/
 
 # Development tools
 .playwright-mcp/
+
+# MDN model files
+ml_init/checkpoints/*.pt
+ml_init/data/*.npz

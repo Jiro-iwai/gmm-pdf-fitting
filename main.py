@@ -98,6 +98,11 @@ For more information, see README.md and docs/ directory.
     show_grid_points = config["show_grid_points"]
     max_grid_points_display = config["max_grid_points_display"]
     
+    # MDN parameters (optional)
+    mdn_config = config.get("mdn", {})
+    mdn_model_path = mdn_config.get("model_path") if mdn_config else None
+    mdn_device = mdn_config.get("device", "auto") if mdn_config else "auto"
+    
     # Prepare initialization parameters
     init_params = prepare_init_params(config, init, mu_x, sigma_x, mu_y, sigma_y, rho)
     
@@ -134,6 +139,8 @@ For more information, see README.md and docs/ directory.
             use_moment_matching=use_moment_matching,
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
+            mdn_model_path=mdn_model_path,
+            mdn_device=mdn_device,
         )
         total_em_time = time.time() - em_start_time
         
@@ -319,6 +326,8 @@ For more information, see README.md and docs/ directory.
             use_moment_matching=use_moment_matching,
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
+            mdn_model_path=mdn_model_path,
+            mdn_device=mdn_device,
         )
         total_em_time = time.time() - em_start_time
         

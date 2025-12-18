@@ -16,7 +16,8 @@
 - **3つのフィッティング方式**: EM方式、LP方式、Hybrid方式から選択可能
 - **EM方式の特徴**:
   - 重み付きEMアルゴリズム: PDFグリッドに1次元GMMをフィット
-  - 4つの初期化方式: quantile, random, QMI, WQMIから選択可能
+  - 5つの初期化方式: quantile, random, QMI, WQMI, MDNから選択可能
+  - **MDN初期化**: 機械学習モデル（Mixture Density Network）による初期値推定で高速化・安定化
   - モーメント一致QP投影: オプションで1〜4次モーメント（平均、分散、歪度、尖度）を一致させるQP投影を適用
 - **LP方式の特徴**:
   - PDF誤差のL∞最小化（`objective_mode="pdf"`）
@@ -99,11 +100,20 @@ python examples/example_moments_mode.py
 ```
 gmm-pdf-fitting/
 ├── src/
-│   └── gmm_fitting/          # GMMフィッティングパッケージ
+│   ├── gmm_fitting/          # GMMフィッティングパッケージ
+│   │   ├── __init__.py
+│   │   ├── em_method.py      # EM法の実装
+│   │   ├── lp_method.py      # LP法の実装
+│   │   └── gmm_utils.py      # GMMユーティリティ関数
+│   └── ml_init/              # MDN初期化パッケージ
 │       ├── __init__.py
-│       ├── em_method.py      # EM法の実装
-│       ├── lp_method.py      # LP法の実装
-│       └── gmm_utils.py      # GMMユーティリティ関数
+│       ├── model.py           # MDNモデル
+│       ├── train.py           # 学習スクリプト
+│       ├── eval.py            # 評価スクリプト
+│       ├── infer.py           # 推論API
+│       ├── dataset.py         # データ生成
+│       ├── metrics.py         # 評価指標
+│       └── wkmeanspp.py       # 重み付きk-means++
 ├── configs/                  # 設定ファイル（JSON）
 │   ├── config_default.json   # デフォルト設定
 │   ├── config_lp.json        # LP法の設定
@@ -161,6 +171,42 @@ gmm-pdf-fitting/
   "output_path": "pdf_comparison"
 }
 ```
+
+#### MDN初期化の設定例
+
+```json
+{
+  "mu_x": 0.1,
+  "sigma_x": 0.4,
+  "mu_y": 0.15,
+  "sigma_y": 0.9,
+  "rho": 0.9,
+  "z_range": [-4, 4],
+  "z_npoints": 64,
+  "K": 5,
+  "method": "em",
+  "max_iter": 30,
+  "tol": 1e-4,
+  "reg_var": 1e-6,
+  "n_init": 1,
+  "seed": 1,
+  "init": "mdn",
+  "mdn": {
+    "model_path": "./ml_init/checkpoints/mdn_init_v1_N64_K5.pt",
+    "device": "auto"
+  },
+  "use_moment_matching": false,
+  "output_path": "pdf_comparison"
+}
+```
+
+**MDN初期化の特徴**:
+- `n_init=1`で十分（MDNが良い初期値を提供）
+- `max_iter`を小さく（10〜30）しても高精度
+- モデルパスの指定方法：
+  - `mdn.model_path`で明示指定（最優先）
+  - 環境変数`MDN_MODEL_PATH`
+  - デフォルト: `./ml_init/checkpoints/mdn_init_v1_N64_K5.pt`
 
 ### LP方式の設定例
 
@@ -239,10 +285,22 @@ gmm-pdf-fitting/
 | `tol` | 収束判定の許容誤差 | 1e-10 |
 | `reg_var` | 分散の正則化項 | 1e-6 |
 | `n_init` | 初期化の試行回数 | 8 |
-| `init` | 初期化方法 ("quantile", "random", "qmi", "wqmi") | "quantile" |
+| `init` | 初期化方法 ("quantile", "random", "qmi", "wqmi", "mdn") | "quantile" |
 | `use_moment_matching` | モーメント一致QP投影を使用するか | false |
 | `qp_mode` | QP制約モード ("hard": 厳密一致、"soft": ペナルティ付き近似) | "hard" |
 | `soft_lambda` | ソフト制約のペナルティ係数（大きいほどモーメント一致を重視） | 1e4 |
+
+#### MDN初期化固有のパラメータ
+
+| パラメータ | 説明 | デフォルト |
+|-----------|------|-----------|
+| `mdn.model_path` | MDNモデルのパス（最優先） | - |
+| `mdn.device` | デバイス ("cpu", "cuda", "auto") | "auto" |
+
+**モデルパスの解決順序**:
+1. `mdn.model_path`（設定ファイル）
+2. 環境変数`MDN_MODEL_PATH`
+3. デフォルト: `./ml_init/checkpoints/mdn_init_v1_N64_K5.pt`
 
 #### LP方式固有のパラメータ
 
@@ -251,6 +309,65 @@ gmm-pdf-fitting/
 | `L` | シグマレベル数 | 5 |
 | `objective_mode` | 目的関数モード ("pdf", "raw_moments") | "pdf" |
 | `lp_params.solver` | LPソルバー | "highs" |
+
+## MDN初期化の使い方
+
+MDN（Mixture Density Network）初期化を使用すると、EMアルゴリズムの初期化を機械学習モデルで推定し、高速化・安定化が期待できます。
+
+### 前提条件
+
+- PyTorchがインストールされていること（`requirements-ml.txt`を参照）
+- 学習済みMDNモデルが利用可能であること
+
+### モデルの学習
+
+```bash
+# 1. 学習データの生成
+python -m ml_init.generate_dataset \
+  --output_dir ./ml_init/data \
+  --n_train 80000 --n_val 10000 --n_test 10000 \
+  --seed_train 0 --seed_val 1 --seed_test 2 \
+  --z_min -8 --z_max 8 --n_points 64
+
+# 2. モデルの学習
+python -m ml_init.train \
+  --data_dir ./ml_init/data \
+  --output_dir ./ml_init/checkpoints \
+  --batch_size 256 \
+  --lr 1e-3 \
+  --epochs 20 \
+  --lambda_mom 0.0
+
+# 3. モデルの評価（オプション）
+python -m ml_init.eval \
+  --model_path ./ml_init/checkpoints/mdn_init_v1_N64_K5.pt \
+  --data_path ./ml_init/data/test.npz \
+  --output_path ./ml_init/eval_results.json
+```
+
+### 使用方法
+
+設定ファイルで`init: "mdn"`を指定するだけです：
+
+```json
+{
+  "init": "mdn",
+  "mdn": {
+    "model_path": "./ml_init/checkpoints/mdn_init_v1_N64_K5.pt",
+    "device": "auto"
+  },
+  "n_init": 1,
+  "max_iter": 30
+}
+```
+
+### フォールバック
+
+MDN初期化が失敗した場合、自動的に以下の順序でフォールバックします：
+
+1. **wkmeanspp**（重み付きk-means++）
+2. **wqmi**（既存のWQMI初期化）
+3. **quantile**（既存のquantile初期化）
 
 ## テスト
 
@@ -386,6 +503,12 @@ python benchmarks/benchmark.py --config configs/config_lp.json --output benchmar
 
 - **バックエンド** (`webapp/requirements.txt`): FastAPI, uvicorn, pydantic
 - **フロントエンド** (`webapp/frontend/package.json`): React, Material-UI, Plotly.js
+
+### MDN初期化（オプション）
+
+- **ML依存** (`requirements-ml.txt`): PyTorch>=2.0.0
+  - MDN初期化を使用する場合のみ必要
+  - インストール: `uv pip install -r requirements-ml.txt`
 
 ## ドキュメント
 
