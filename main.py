@@ -135,7 +135,7 @@ For more information, see README.md and docs/ directory.
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
         )
-        em_elapsed_time = time.time() - em_start_time
+        total_em_time = time.time() - em_start_time
         
         # Extract QP execution time if moment matching was used
         qp_elapsed_time = 0.0
@@ -143,6 +143,9 @@ For more information, see README.md and docs/ directory.
         if use_moment_matching and hasattr(params, '_qp_info'):
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
+        
+        # Subtract QP time from total to get pure EM time
+        em_elapsed_time = total_em_time - qp_elapsed_time
         
         # Convert to log-likelihood for compatibility (LP doesn't use LL)
         # For EM, ll is already log-likelihood
@@ -317,7 +320,7 @@ For more information, see README.md and docs/ directory.
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
         )
-        em_elapsed_time = time.time() - em_start_time
+        total_em_time = time.time() - em_start_time
         
         # Extract QP execution time if moment matching was used
         qp_elapsed_time = 0.0
@@ -325,6 +328,9 @@ For more information, see README.md and docs/ directory.
         if use_moment_matching and hasattr(params, '_qp_info'):
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
+        
+        # Subtract QP time from total to get pure EM time
+        em_elapsed_time = total_em_time - qp_elapsed_time
         
         ll_value = ll
         
