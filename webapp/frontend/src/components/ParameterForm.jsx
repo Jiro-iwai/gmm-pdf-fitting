@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Box,
   Button,
@@ -18,59 +18,87 @@ import {
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 
+const STORAGE_KEY = 'gmm-fitting-params'
+
+const defaultFormData = {
+  // Bivariate normal parameters
+  mu_x: 0.0,
+  sigma_x: 0.8,
+  mu_y: 0.0,
+  sigma_y: 1.6,
+  rho: 0.9,
+  
+  // Grid parameters
+  z_range_min: -6.0,
+  z_range_max: 8.0,
+  z_npoints: 2500,
+  
+  // GMM parameters
+  K: 3,
+  method: 'em',
+  
+  // EM parameters
+  max_iter: 400,
+  tol: 1e-10,
+  reg_var: 1e-6,
+  n_init: 8,
+  seed: 1,
+  init: 'quantile',
+  use_moment_matching: false,
+  qp_mode: 'hard',
+  soft_lambda: 1e4,
+  
+  // LP parameters
+  L: 5,
+  objective_mode: 'pdf',
+  solver: 'highs',
+  sigma_min_scale: 0.1,
+  sigma_max_scale: 3.0,
+  pdf_tolerance: null,
+  lambda_raw: null,
+  objective_form: 'A',
+  
+  // Hybrid parameters
+  dict_J: null,
+  dict_L: 10,
+  mu_mode: 'quantile',
+  tail_focus: 'none',
+  tail_alpha: 1.0,
+  
+  // Display options
+  show_grid_points: true,
+  max_grid_points_display: 200,
+}
+
+// Load saved parameters from localStorage
+const loadSavedParams = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // Merge with defaults to ensure all fields exist
+      return { ...defaultFormData, ...parsed }
+    }
+  } catch (e) {
+    console.warn('Failed to load saved parameters:', e)
+  }
+  return defaultFormData
+}
+
 const ParameterForm = ({ onSubmit, loading }) => {
   // Track which fields are being edited (to allow temporary string values)
   const [editingFields, setEditingFields] = useState({})
   
-  const [formData, setFormData] = useState({
-    // Bivariate normal parameters
-    mu_x: 0.0,
-    sigma_x: 0.8,
-    mu_y: 0.0,
-    sigma_y: 1.6,
-    rho: 0.9,
-    
-    // Grid parameters
-    z_range_min: -6.0,
-    z_range_max: 8.0,
-    z_npoints: 2500,
-    
-    // GMM parameters
-    K: 3,
-    method: 'em',
-    
-    // EM parameters
-    max_iter: 400,
-    tol: 1e-10,
-    reg_var: 1e-6,
-    n_init: 8,
-    seed: 1,
-    init: 'quantile',
-    use_moment_matching: false,
-    qp_mode: 'hard',
-    soft_lambda: 1e4,
-    
-    // LP parameters
-    L: 5,
-    objective_mode: 'pdf',
-    solver: 'highs',
-    sigma_min_scale: 0.1,
-    sigma_max_scale: 3.0,
-    pdf_tolerance: null,
-    lambda_raw: null,
-    objective_form: 'A',
-    
-    // Hybrid parameters
-    dict_J: null,
-    dict_L: 10,
-    mu_mode: 'quantile',
-    tail_focus: 'none',
-    tail_alpha: 1.0,
-    
-    // Display options
-    show_grid_points: true,
-    max_grid_points_display: 200,
-  })
+  const [formData, setFormData] = useState(loadSavedParams)
+  
+  // Save parameters to localStorage whenever formData changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData))
+    } catch (e) {
+      console.warn('Failed to save parameters:', e)
+    }
+  }, [formData])
 
   const handleChange = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value
@@ -931,6 +959,18 @@ const ParameterForm = ({ onSubmit, loading }) => {
           disabled={loading}
         >
           Export Config
+        </Button>
+        <Button
+          variant="outlined"
+          color="warning"
+          size="large"
+          onClick={() => {
+            setFormData(defaultFormData)
+            setEditingFields({})
+          }}
+          disabled={loading}
+        >
+          Reset
         </Button>
       </Box>
     </Box>
