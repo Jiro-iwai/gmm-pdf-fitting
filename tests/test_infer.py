@@ -19,6 +19,8 @@ from src.ml_init.infer import (
     mdn_predict_init,
     _sort_components,
     _resample_to_fixed_grid,
+    clear_model_cache,
+    get_cache_size,
 )
 from src.ml_init.dataset import generate_dataset
 from src.ml_init.train import train_mdn_model
@@ -303,4 +305,85 @@ def test_resample_to_fixed_grid():
     w[0] = w[-1] = (z_target[1] - z_target[0]) / 2
     integral = np.sum(f_resampled * w)
     assert np.isclose(integral, 1.0, rtol=0.1)
+
+
+def test_model_cache():
+    """Test that models are cached and reused."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        data_dir = Path(tmpdir) / "data"
+        output_dir = Path(tmpdir) / "checkpoints"
+        data_dir.mkdir()
+        output_dir.mkdir()
+        
+        # Clear cache before test
+        clear_model_cache()
+        assert get_cache_size() == 0
+        
+        # Generate dataset and train
+        generate_dataset(
+            output_dir=data_dir,
+            n_train=50,
+            n_val=10,
+            n_test=10,
+            seed_train=0,
+            seed_val=1,
+            seed_test=2,
+            z_min=-8,
+            z_max=8,
+            n_points=64,
+        )
+        
+        train_mdn_model(
+            data_dir=data_dir,
+            output_dir=output_dir,
+            batch_size=16,
+            lr=1e-3,
+            epochs=1,
+            lambda_mom=0.0,
+            N=64,
+            K=5,
+            H=128,
+            sigma_min=1e-3,
+            num_workers=0,
+        )
+        
+        model_path = output_dir / "mdn_init_v1_N64_K5.pt"
+        
+        # Setup PDF
+        z = np.linspace(-8, 8, 64)
+        f_true = np.exp(-0.5 * z**2)
+        f_true = f_true / np.sum(f_true * (z[1] - z[0]))
+        
+        # First call: should load and cache
+        result1 = mdn_predict_init(
+            z, f_true, K=5,
+            model_path=model_path,
+            device="cpu",
+        )
+        assert get_cache_size() == 1
+        
+        # Second call: should use cache
+        result2 = mdn_predict_init(
+            z, f_true, K=5,
+            model_path=model_path,
+            device="cpu",
+        )
+        assert get_cache_size() == 1  # Still 1, not 2
+        
+        # Results should be identical
+        np.testing.assert_array_almost_equal(result1["pi"], result2["pi"])
+        np.testing.assert_array_almost_equal(result1["mu"], result2["mu"])
+        np.testing.assert_array_almost_equal(result1["var"], result2["var"])
+        
+        # Clear cache
+        clear_model_cache()
+        assert get_cache_size() == 0
+        
+        # After clearing, should load again
+        result3 = mdn_predict_init(
+            z, f_true, K=5,
+            model_path=model_path,
+            device="cpu",
+        )
+        assert get_cache_size() == 1
 

@@ -1,6 +1,7 @@
 """MDN inference API for GMM initialization."""
 import json
 from pathlib import Path
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -13,6 +14,69 @@ from src.ml_init.eval import load_model_and_metadata
 class MDNInitError(RuntimeError):
     """Raised when MDN-based initialization fails (load/version/device/numerics)."""
     pass
+
+
+# Module-level cache for loaded models
+_model_cache: dict[str, Tuple[MDNModel, dict, np.ndarray]] = {}
+
+
+def _get_cached_model(
+    model_path: Path,
+    device: str,
+) -> Tuple[MDNModel, dict, np.ndarray]:
+    """
+    Get cached model or load and cache it.
+    
+    Parameters:
+    -----------
+    model_path : Path
+        Path to model checkpoint
+    device : str
+        Device ("cpu", "cuda", or "auto")
+    
+    Returns:
+    --------
+    model : MDNModel
+        Loaded model (moved to device)
+    metadata : dict
+        Model metadata
+    z : np.ndarray
+        Grid points
+    """
+    model_path_str = str(model_path.resolve())
+    
+    # Check cache
+    if model_path_str in _model_cache:
+        model, metadata, z = _model_cache[model_path_str]
+        # Move model to requested device
+        device_obj = torch.device(device)
+        if next(model.parameters()).device != device_obj:
+            model = model.to(device_obj)
+        return model, metadata, z
+    
+    # Load and cache
+    model, metadata, z = load_model_and_metadata(model_path)
+    device_obj = torch.device(device)
+    model = model.to(device_obj)
+    model.eval()
+    
+    # Cache the model (on CPU to save GPU memory)
+    model_cpu = model.cpu()
+    _model_cache[model_path_str] = (model_cpu, metadata, z)
+    
+    # Return model on requested device
+    return model_cpu.to(device_obj), metadata, z
+
+
+def clear_model_cache():
+    """Clear the model cache."""
+    global _model_cache
+    _model_cache.clear()
+
+
+def get_cache_size() -> int:
+    """Get the number of cached models."""
+    return len(_model_cache)
 
 
 def _resample_to_fixed_grid(
@@ -150,9 +214,8 @@ def mdn_predict_init(
         device = "cuda" if torch.cuda.is_available() else "cpu"
     
     try:
-        # Load model and metadata
-        model, metadata, z_model = load_model_and_metadata(model_path)
-        model = model.to(device)
+        # Load model and metadata (cached)
+        model, metadata, z_model = _get_cached_model(model_path, device)
         model.eval()
         
         # Check K matches
