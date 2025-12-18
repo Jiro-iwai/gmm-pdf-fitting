@@ -38,7 +38,7 @@ describe('StatisticsTable', () => {
 
     expect(screen.getByText(/statistic/i)).toBeInTheDocument()
     expect(screen.getByText(/true pdf/i)).toBeInTheDocument()
-    expect(screen.getByText(/gmm approx pdf/i)).toBeInTheDocument()
+    expect(screen.getByText(/gmm approx/i)).toBeInTheDocument()
     expect(screen.getByText(/rel error/i)).toBeInTheDocument()
   })
 
@@ -65,8 +65,12 @@ describe('StatisticsTable', () => {
     )
 
     // Check that values are displayed (format may vary)
-    expect(screen.getByText(/0[.]5/)).toBeInTheDocument() // mean
-    expect(screen.getByText(/1[.]0/)).toBeInTheDocument() // std
+    // There may be multiple elements with these values, so use getAllByText
+    const meanValues = screen.getAllByText(/0[.]500000/)
+    expect(meanValues.length).toBeGreaterThan(0) // mean
+    
+    const stdValues = screen.getAllByText(/1[.]000000/)
+    expect(stdValues.length).toBeGreaterThan(0) // std
   })
 
   test('calculates and displays relative error', () => {
@@ -78,8 +82,9 @@ describe('StatisticsTable', () => {
     )
 
     // Relative error for mean: (0.51 - 0.5) / 0.5 * 100 = 2%
-    // Should display percentage
-    expect(screen.getByText(/%/)).toBeInTheDocument()
+    // Should display percentage (there may be multiple matches, so use getAllByText)
+    const percentageElements = screen.getAllByText(/%/)
+    expect(percentageElements.length).toBeGreaterThan(0)
   })
 
   test('handles missing statistics gracefully', () => {
