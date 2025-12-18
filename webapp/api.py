@@ -125,13 +125,16 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
         )
-        em_elapsed_time = time.time() - em_start_time
+        total_em_time = time.time() - em_start_time
         
         qp_elapsed_time = 0.0
         qp_info = None
         if use_moment_matching and hasattr(params, '_qp_info'):
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
+        
+        # Subtract QP time from total to get pure EM time
+        em_elapsed_time = total_em_time - qp_elapsed_time
         
         ll_value = ll
         diagnostics = None
@@ -298,13 +301,16 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
         )
-        em_elapsed_time = time.time() - em_start_time
+        total_em_time = time.time() - em_start_time
         
         qp_elapsed_time = 0.0
         qp_info = None
         if use_moment_matching and hasattr(params, '_qp_info'):
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
+        
+        # Subtract QP time from total to get pure EM time
+        em_elapsed_time = total_em_time - qp_elapsed_time
         
         ll_value = ll
         
