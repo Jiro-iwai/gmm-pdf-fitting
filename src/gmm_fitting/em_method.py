@@ -1002,14 +1002,14 @@ def _project_moments_qp(
             # Initial guess: EM weights
             x0 = pi_em.copy()
             
-            # Solve QP
+            # Solve QP (maxiter=100 to avoid long computation when infeasible)
             result = minimize(
                 objective,
                 x0,
                 method='SLSQP',
                 bounds=bounds,
                 constraints=constraints,
-                options={'maxiter': 1000, 'ftol': 1e-9}
+                options={'maxiter': 100, 'ftol': 1e-9}
             )
             
             if result.success:
