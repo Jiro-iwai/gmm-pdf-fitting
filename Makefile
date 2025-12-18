@@ -1,4 +1,4 @@
-.PHONY: test test-verbose test-cov clean install help webapp-install webapp-start webapp-stop webapp-backend webapp-frontend webapp-status webapp-logs webapp-clean
+.PHONY: test test-verbose test-cov test-frontend test-all clean install help webapp-install webapp-start webapp-stop webapp-backend webapp-frontend webapp-status webapp-logs webapp-clean
 
 # Default target
 .DEFAULT_GOAL := help
@@ -18,25 +18,47 @@ help: ## Show this help message
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-test: ## Run all tests
-	@echo "Running tests..."
+test: ## Run all tests (Python + Frontend)
+	@echo "Running Python tests..."
 	$(PYTEST) $(TEST_DIR)
+	@echo ""
+	@echo "Running frontend tests..."
+	@cd webapp/frontend && npm test -- --watchAll=false || (echo "Frontend tests failed. Make sure dependencies are installed: cd webapp/frontend && npm install" && exit 1)
+	@echo ""
+	@echo "All tests passed!"
+
+test-python: ## Run Python tests only
+	@echo "Running Python tests..."
+	$(PYTEST) $(TEST_DIR)
+
+test-frontend: ## Run frontend tests only
+	@echo "Running frontend tests..."
+	@cd webapp/frontend && npm test -- --watchAll=false
+
+test-all: test ## Alias for test (runs all tests)
 
 test-verbose: ## Run tests with verbose output
 	@echo "Running tests with verbose output..."
 	$(PYTEST) $(TEST_DIR) -v
 
-test-cov: ## Run tests with coverage report
-	@echo "Running tests with coverage report..."
+test-cov: ## Run Python tests with coverage report
+	@echo "Running Python tests with coverage report..."
 	$(PYTEST) $(TEST_DIR) --cov=$(COV_MODULE) --cov-report=$(COV_REPORT)
+
+test-cov-all: ## Run all tests with coverage reports
+	@echo "Running Python tests with coverage report..."
+	$(PYTEST) $(TEST_DIR) --cov=$(COV_MODULE) --cov-report=$(COV_REPORT)
+	@echo ""
+	@echo "Running frontend tests with coverage report..."
+	@cd webapp/frontend && npm run test:coverage || (echo "Frontend tests failed. Make sure dependencies are installed: cd webapp/frontend && npm install" && exit 1)
 
 test-cov-html: ## Run tests and generate HTML coverage report
 	@echo "Running tests and generating HTML coverage report..."
 	$(PYTEST) $(TEST_DIR) --cov=$(COV_MODULE) --cov-report=html
 	@echo "Coverage report generated in htmlcov/index.html"
 
-test-fast: ## Run tests quickly (no coverage)
-	@echo "Running tests (fast mode)..."
+test-fast: ## Run Python tests quickly (no coverage)
+	@echo "Running Python tests (fast mode)..."
 	$(PYTEST) $(TEST_DIR) -q
 
 test-specific: ## Run specific test file (usage: make test-specific FILE=tests/test_pdf_calculation.py)
