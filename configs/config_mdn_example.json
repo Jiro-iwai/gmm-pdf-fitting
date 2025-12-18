@@ -1,0 +1,28 @@
+{
+  "mu_x": 0.1,
+  "sigma_x": 0.4,
+  "mu_y": 0.15,
+  "sigma_y": 0.9,
+  "rho": 0.9,
+  "z_range": [-4, 4],
+  "z_npoints": 64,
+  "K": 5,
+  "method": "em",
+  "max_iter": 30,
+  "tol": 1e-4,
+  "reg_var": 1e-6,
+  "n_init": 1,
+  "seed": 1,
+  "init": "mdn",
+  "mdn": {
+    "model_path": "./ml_init/checkpoints/mdn_init_v1_N64_K5.pt",
+    "device": "auto"
+  },
+  "use_moment_matching": false,
+  "qp_mode": "hard",
+  "soft_lambda": 1e4,
+  "output_path": "pdf_comparison_mdn",
+  "show_grid_points": false,
+  "max_grid_points_display": 100
+}
+

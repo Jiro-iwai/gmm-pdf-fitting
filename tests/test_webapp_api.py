@@ -210,6 +210,54 @@ class TestComputeEndpoint:
         assert data["execution_time"]["em_time"] is not None
     
     @pytest.mark.skipif(not TESTCLIENT_AVAILABLE, reason="httpx not available")
+    def test_compute_em_method_mdn_init(self):
+        """Test compute endpoint with EM method using MDN initialization."""
+        import os
+        mdn_model_path = "./ml_init/checkpoints/mdn_init_v1_N64_K5.pt"
+        if not os.path.exists(mdn_model_path):
+            pytest.skip(f"MDN model not found: {mdn_model_path}")
+        
+        request_data = {
+            "bivariate_params": {
+                "mu_x": 0.1,
+                "sigma_x": 0.4,
+                "mu_y": 0.15,
+                "sigma_y": 0.9,
+                "rho": 0.9
+            },
+            "grid_params": {
+                "z_range": [-4, 4],
+                "z_npoints": 64  # Match MDN model grid size
+            },
+            "K": 5,  # Match MDN model K
+            "method": "em",
+            "em_params": {
+                "max_iter": 30,
+                "tol": 1e-4,
+                "n_init": 1,
+                "init": "mdn",
+                "use_moment_matching": False,
+                "mdn_params": {
+                    "model_path": mdn_model_path,
+                    "device": "auto"
+                }
+            }
+        }
+        
+        response = client.post("/api/compute", json=request_data)
+        if response.status_code != 200:
+            print(f"Response status: {response.status_code}")
+            print(f"Response body: {response.text}")
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert data["success"] is True
+        assert data["method"] == "em"
+        assert len(data["gmm_components"]) == 5
+        assert "statistics_true" in data
+        assert "statistics_hat" in data
+    
+    @pytest.mark.skipif(not TESTCLIENT_AVAILABLE, reason="httpx not available")
     def test_compute_invalid_params(self):
         """Test compute endpoint with invalid parameters."""
         request_data = {

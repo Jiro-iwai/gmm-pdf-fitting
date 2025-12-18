@@ -28,6 +28,12 @@ class GridParams(BaseModel):
         return v
 
 
+class MDNParams(BaseModel):
+    """Parameters for MDN initialization."""
+    model_path: Optional[str] = Field(default=None, description="Path to MDN model file")
+    device: Literal["auto", "cpu", "cuda"] = Field(default="auto", description="Device for MDN inference")
+
+
 class EMMethodParams(BaseModel):
     """Parameters specific to EM method."""
     max_iter: int = Field(default=400, gt=0, description="Maximum iterations")
@@ -35,10 +41,11 @@ class EMMethodParams(BaseModel):
     reg_var: float = Field(default=1e-6, gt=0, description="Variance regularization")
     n_init: int = Field(default=8, gt=0, description="Number of initializations")
     seed: int = Field(default=1, description="Random seed")
-    init: Literal["quantile", "random", "qmi", "wqmi", "custom"] = Field(default="quantile", description="Initialization method")
+    init: Literal["quantile", "random", "qmi", "wqmi", "mdn", "custom"] = Field(default="quantile", description="Initialization method")
     use_moment_matching: bool = Field(default=False, description="Use moment matching QP projection")
     qp_mode: Literal["hard", "soft"] = Field(default="hard", description="QP projection mode")
     soft_lambda: float = Field(default=1e4, gt=0, description="Soft constraint penalty coefficient")
+    mdn_params: Optional[MDNParams] = Field(default=None, description="MDN initialization parameters")
 
 
 class LPMethodParams(BaseModel):
