@@ -231,7 +231,7 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
             y: componentPdf,
             type: 'scatter',
             mode: 'lines',
-            name: `Component ${idx + 1} (π=${pi.toFixed(3)})`,
+            name: `Component ${idx + 1} (w=${pi.toFixed(3)})`,
             line: {
               color: componentColors[idx % componentColors.length],
               width: Math.max(1, plotSettings.lineWidth - 0.5),
