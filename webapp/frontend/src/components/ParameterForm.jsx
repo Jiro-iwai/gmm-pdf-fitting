@@ -20,6 +20,39 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 
 const STORAGE_KEY = 'gmm-fitting-params'
 
+// Fields that should use exponential notation (e.g., 1e-6)
+const EXPONENTIAL_FIELDS = ['tol', 'reg_var', 'soft_lambda', 'pdf_tolerance']
+
+// Format number as exponential notation string
+const formatExponential = (value) => {
+  if (value === null || value === undefined || value === '') return ''
+  // For strings, try to parse and format (unless it's a partial input like "1e-")
+  if (typeof value === 'string') {
+    // Check if it's a partial exponential input (keep as-is during editing)
+    if (value.match(/e-?$/i) || value === '-') return value
+    const parsed = parseFloat(value)
+    if (isNaN(parsed)) return value
+    value = parsed
+  }
+  if (value === 0) return '0'
+  const num = Number(value)
+  if (isNaN(num)) return ''
+  // Use exponential notation for very small or very large numbers
+  if (Math.abs(num) < 0.01 || Math.abs(num) >= 10000) {
+    return num.toExponential()
+  }
+  return String(num)
+}
+
+// Parse exponential notation string to number
+const parseExponential = (str) => {
+  if (str === '' || str === null || str === undefined) return null
+  if (str === '-' || str === 'e' || str === '-e' || str === '1e' || str === '-1e') return str // Allow partial input
+  const num = parseFloat(str)
+  if (isNaN(num)) return null
+  return num
+}
+
 const defaultFormData = {
   // Bivariate normal parameters
   mu_x: 0.0,
@@ -104,11 +137,44 @@ const ParameterForm = ({ onSubmit, loading }) => {
 
   const handleChange = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value
+    
+    // Check if this is a numeric field by looking at defaultFormData
+    // Also treat EXPONENTIAL_FIELDS as numeric (even if defaultFormData has null)
+    const isExponentialField = EXPONENTIAL_FIELDS.includes(field)
+    const isNumericField = typeof defaultFormData[field] === 'number' || isExponentialField
+    
+    if (isNumericField) {
+      // Mark field as being edited (called outside setFormData callback)
+      setEditingFields((prevEditing) => ({ ...prevEditing, [field]: true }))
+    }
+    
     setFormData((prev) => {
-      const prevValue = prev[field]
-      if (typeof prevValue === 'number') {
-        // Mark field as being edited
-        setEditingFields((prevEditing) => ({ ...prevEditing, [field]: true }))
+      if (isNumericField) {
+        // For exponential fields, allow partial exponential notation during editing
+        if (isExponentialField) {
+          // Allow partial exponential input patterns (e.g., "1e", "1e-", "-1e", "0.", "0.0")
+          const expPartialPattern = /^-?(\d*\.?\d*)(e-?)?(\d*)$/i
+          if (value === '' || expPartialPattern.test(value)) {
+            // Check if input is a partial number (ends with "." or "e" or "e-" or trailing zeros after decimal)
+            const isPartialInput = value === '' || 
+                                   value.endsWith('.') || 
+                                   value.endsWith('e') || 
+                                   value.endsWith('e-') || 
+                                   value.endsWith('E') || 
+                                   value.endsWith('E-') ||
+                                   /\.\d*0$/.test(value)  // e.g., "0.10", "1.00"
+            
+            if (!isPartialInput) {
+              const numValue = parseFloat(value)
+              if (!isNaN(numValue) && isFinite(numValue)) {
+                return { ...prev, [field]: numValue }
+              }
+            }
+            // Store as string during partial input
+            return { ...prev, [field]: value }
+          }
+          return prev
+        }
         
         // Allow empty string and minus sign during editing (store as string temporarily)
         if (value === '' || value === '-') {
@@ -751,25 +817,28 @@ const ParameterForm = ({ onSubmit, loading }) => {
                 <TextField
                   fullWidth
                   label="Tolerance"
-                  type="number"
-                  value={editingFields.tol ? formData.tol : (typeof formData.tol === 'number' ? formData.tol : '')}
+                  type="text"
+                  value={editingFields.tol ? formData.tol : formatExponential(formData.tol)}
                   onChange={handleChange('tol')}
                   onBlur={handleBlur('tol', 1e-10)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
-                  inputProps={{ step: 'any', min: 0.0000000001 }}
-                  helperText="Must be greater than 0"
+                  placeholder="e.g., 1e-10"
+                  helperText="Exponential notation (e.g., 1e-10)"
                 />
               </Grid>
               <Grid item xs={6}>
                 <TextField
                   fullWidth
                   label="reg_var"
-                  type="number"
-                  value={editingFields.reg_var ? formData.reg_var : (typeof formData.reg_var === 'number' ? formData.reg_var : '')}
+                  type="text"
+                  value={editingFields.reg_var ? formData.reg_var : formatExponential(formData.reg_var)}
                   onChange={handleChange('reg_var')}
                   onBlur={handleBlur('reg_var', 1e-6)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
-                  inputProps={{ step: 'any' }}
+                  placeholder="e.g., 1e-6"
+                  helperText="Exponential notation (e.g., 1e-6)"
                 />
               </Grid>
               <Grid item xs={6}>
@@ -795,23 +864,33 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Initialization</InputLabel>
-                  <Select
-                    value={formData.init}
-                    onChange={handleChange('init')}
-                    label="Initialization"
-                  >
-                    <MenuItem value="quantile">Quantile</MenuItem>
-                    <MenuItem value="random">Random</MenuItem>
-                    <MenuItem value="qmi">QMI</MenuItem>
-                    <MenuItem value="wqmi">WQMI</MenuItem>
-                    <MenuItem value="mdn">MDN (Machine Learning)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              {formData.init === 'mdn' && (
+              {formData.method === 'hybrid' && (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1 }}>
+                    Note: Hybrid method uses LP solution as initial values for EM algorithm.
+                    Initialization method selection is not applicable.
+                  </Typography>
+                </Grid>
+              )}
+              {formData.method !== 'hybrid' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth margin="normal">
+                    <InputLabel>Initialization</InputLabel>
+                    <Select
+                      value={formData.init}
+                      onChange={handleChange('init')}
+                      label="Initialization"
+                    >
+                      <MenuItem value="quantile">Quantile</MenuItem>
+                      <MenuItem value="random">Random</MenuItem>
+                      <MenuItem value="qmi">QMI</MenuItem>
+                      <MenuItem value="wqmi">WQMI</MenuItem>
+                      <MenuItem value="mdn">MDN (Machine Learning)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              {formData.init === 'mdn' && formData.method !== 'hybrid' && (
                 <>
                   <Grid item xs={12}>
                     <TextField
@@ -869,11 +948,14 @@ const ParameterForm = ({ onSubmit, loading }) => {
                     <TextField
                       fullWidth
                       label="Soft Lambda"
-                      type="number"
-                      value={editingFields.soft_lambda ? formData.soft_lambda : (typeof formData.soft_lambda === 'number' ? formData.soft_lambda : '')}
+                      type="text"
+                      value={editingFields.soft_lambda ? formData.soft_lambda : formatExponential(formData.soft_lambda)}
                       onChange={handleChange('soft_lambda')}
                       onBlur={handleBlur('soft_lambda', 1e4)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
+                      placeholder="e.g., 1e4"
+                      helperText="Exponential notation (e.g., 1e4)"
                     />
                   </Grid>
                 </>
@@ -892,18 +974,6 @@ const ParameterForm = ({ onSubmit, loading }) => {
           <AccordionDetails>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <TextField
-                  fullWidth
-                  label="L (Sigma Levels)"
-                  type="number"
-                  value={editingFields.L ? formData.L : (typeof formData.L === 'number' ? formData.L : '')}
-                  onChange={handleChange('L')}
-                  onBlur={handleBlur('L', 5)}
-                  margin="normal"
-                  inputProps={{ min: 1 }}
-                />
-              </Grid>
-              <Grid item xs={6}>
                 <FormControl fullWidth margin="normal">
                   <InputLabel>Objective Mode</InputLabel>
                   <Select
@@ -914,6 +984,11 @@ const ParameterForm = ({ onSubmit, loading }) => {
                     <MenuItem value="pdf">PDF Error</MenuItem>
                     <MenuItem value="raw_moments">Raw Moments</MenuItem>
                   </Select>
+                  <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
+                    {formData.objective_mode === 'pdf' 
+                      ? 'Objective: min t_pdf (PDF L∞ error only)'
+                      : 'Include raw moments (M1-M4) in optimization (see Form A/B below)'}
+                  </Typography>
                 </FormControl>
               </Grid>
               <Grid item xs={6}>
@@ -933,6 +1008,24 @@ const ParameterForm = ({ onSubmit, loading }) => {
               <Grid item xs={6}>
                 <TextField
                   fullWidth
+                  label="L (Sigma Levels)"
+                  type="number"
+                  value={editingFields.L ? formData.L : (typeof formData.L === 'number' ? formData.L : '')}
+                  onChange={handleChange('L')}
+                  onBlur={handleBlur('L', 5)}
+                  margin="normal"
+                  inputProps={{ min: 1 }}
+                  helperText="Number of σ levels in Gaussian basis dictionary"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 0.5 }}>
+                  Gaussian basis σ range: [σ_min × scale_min, σ_min × scale_max] where σ_min is estimated from PDF
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
                   label="Sigma Min Scale"
                   type="number"
                   value={editingFields.sigma_min_scale ? formData.sigma_min_scale : (typeof formData.sigma_min_scale === 'number' ? formData.sigma_min_scale : '')}
@@ -940,6 +1033,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   onBlur={handleBlur('sigma_min_scale', 0.1)}
                   margin="normal"
                   inputProps={{ step: 'any', min: 0.01 }}
+                  helperText="Min σ multiplier for basis functions"
                 />
               </Grid>
               <Grid item xs={6}>
@@ -951,11 +1045,24 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   onChange={handleChange('sigma_max_scale')}
                   onBlur={handleBlur('sigma_max_scale', 3.0)}
                   margin="normal"
-                  inputProps={{ step: 'any', min: 1 }}
+                  inputProps={{ step: 'any', min: 0.01 }}
+                  helperText="Max σ multiplier for basis functions"
                 />
               </Grid>
               {formData.objective_mode === 'raw_moments' && (
                 <>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1, fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                      <strong>Raw Moments Mode - Objective Function:</strong><br/>
+                      {formData.objective_form === 'A' 
+                        ? '• Form A: min Σλₙ·tₙ  s.t. t_pdf ≤ τ (PDF error as constraint)'
+                        : '• Form B: min λ_pdf·t_pdf + Σλₙ·tₙ (PDF + moments weighted sum)'}
+                      <br/>
+                      <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                        where tₙ = raw moment errors (M1=mean, M2, M3, M4)
+                      </span>
+                    </Typography>
+                  </Grid>
                   <Grid item xs={6}>
                     <FormControl fullWidth margin="normal">
                       <InputLabel>Objective Form</InputLabel>
@@ -964,21 +1071,26 @@ const ParameterForm = ({ onSubmit, loading }) => {
                         onChange={handleChange('objective_form')}
                         label="Objective Form"
                       >
-                        <MenuItem value="A">Form A (PDF constraint)</MenuItem>
-                        <MenuItem value="B">Form B (Weighted sum)</MenuItem>
+                        <MenuItem value="A">Form A: PDF as constraint</MenuItem>
+                        <MenuItem value="B">Form B: PDF in objective</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
                   <Grid item xs={6}>
                     <TextField
                       fullWidth
-                      label="PDF Tolerance (optional)"
-                      type="number"
-                      value={formData.pdf_tolerance || ''}
+                      label={formData.objective_form === 'A' ? "PDF Tolerance (τ)" : "PDF Tolerance (not used)"}
+                      type="text"
+                      value={editingFields.pdf_tolerance ? formData.pdf_tolerance : formatExponential(formData.pdf_tolerance)}
                       onChange={handleChange('pdf_tolerance')}
+                      onBlur={handleBlur('pdf_tolerance', null)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
-                      inputProps={{ step: 'any', min: 0 }}
-                      placeholder="None"
+                      placeholder="e.g., 1e-3 or None"
+                      disabled={formData.objective_form === 'B'}
+                      helperText={formData.objective_form === 'A' 
+                        ? "Exponential notation (e.g., 1e-3). Empty = no limit" 
+                        : "Form B uses λ_pdf weight instead"}
                     />
                   </Grid>
                 </>

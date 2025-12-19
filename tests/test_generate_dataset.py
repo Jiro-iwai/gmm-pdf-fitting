@@ -58,11 +58,12 @@ def test_generate_dataset_basic():
             assert np.isclose(integral, 1.0, rtol=1e-3), f"Sample {i} not normalized"
         
         # Check params are in valid ranges
+        # Note: SIGMA_RANGE is (0.15, 2.5) as of V2 dataset improvements
         mu_x, sigma_x, mu_y, sigma_y, rho = params.T
         assert np.all(mu_x >= -3.0) and np.all(mu_x <= 3.0)
-        assert np.all(sigma_x >= 0.3) and np.all(sigma_x <= 2.0)
+        assert np.all(sigma_x >= 0.15) and np.all(sigma_x <= 2.5)
         assert np.all(mu_y >= -3.0) and np.all(mu_y <= 3.0)
-        assert np.all(sigma_y >= 0.3) and np.all(sigma_y <= 2.0)
+        assert np.all(sigma_y >= 0.15) and np.all(sigma_y <= 2.5)
         assert np.all(rho >= -0.99) and np.all(rho <= 0.99)
 
 
