@@ -926,8 +926,8 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   </Select>
                   <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
                     {formData.objective_mode === 'pdf' 
-                      ? 'Minimize PDF L∞ error only'
-                      : 'Minimize raw moment errors (M1-M4) with PDF constraint'}
+                      ? 'Objective: min t_pdf (PDF L∞ error only)'
+                      : 'Include raw moments (M1-M4) in optimization (see Form A/B below)'}
                   </Typography>
                 </FormControl>
               </Grid>
@@ -972,9 +972,15 @@ const ParameterForm = ({ onSubmit, loading }) => {
               {formData.objective_mode === 'raw_moments' && (
                 <>
                   <Grid item xs={12}>
-                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1 }}>
-                      <strong>Raw Moments Mode:</strong> Minimizes errors in raw moments (M1=mean, M2=variance, M3, M4) 
-                      while satisfying PDF constraints. This is a fully linear LP problem that can be solved efficiently.
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1, fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                      <strong>Raw Moments Mode - Objective Function:</strong><br/>
+                      {formData.objective_form === 'A' 
+                        ? '• Form A: min Σλₙ·tₙ  s.t. t_pdf ≤ τ (PDF error as constraint)'
+                        : '• Form B: min λ_pdf·t_pdf + Σλₙ·tₙ (PDF + moments weighted sum)'}
+                      <br/>
+                      <span style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                        where tₙ = raw moment errors (M1=mean, M2, M3, M4)
+                      </span>
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -985,26 +991,25 @@ const ParameterForm = ({ onSubmit, loading }) => {
                         onChange={handleChange('objective_form')}
                         label="Objective Form"
                       >
-                        <MenuItem value="A">Form A (PDF constraint)</MenuItem>
-                        <MenuItem value="B">Form B (Weighted sum)</MenuItem>
+                        <MenuItem value="A">Form A: PDF as constraint</MenuItem>
+                        <MenuItem value="B">Form B: PDF in objective</MenuItem>
                       </Select>
-                      <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
-                        {formData.objective_form === 'A'
-                          ? 'Form A: Minimize moment errors subject to PDF tolerance constraint'
-                          : 'Form B: Minimize weighted sum of PDF and moment errors'}
-                      </Typography>
                     </FormControl>
                   </Grid>
                   <Grid item xs={6}>
                     <TextField
                       fullWidth
-                      label="PDF Tolerance (optional)"
+                      label={formData.objective_form === 'A' ? "PDF Tolerance (τ)" : "PDF Tolerance (not used)"}
                       type="number"
                       value={formData.pdf_tolerance || ''}
                       onChange={handleChange('pdf_tolerance')}
                       margin="normal"
                       inputProps={{ step: 'any', min: 0 }}
-                      placeholder="None"
+                      placeholder="None (no limit)"
+                      disabled={formData.objective_form === 'B'}
+                      helperText={formData.objective_form === 'A' 
+                        ? "Max PDF error constraint (t_pdf ≤ τ)" 
+                        : "Form B uses λ_pdf weight instead"}
                     />
                   </Grid>
                 </>
