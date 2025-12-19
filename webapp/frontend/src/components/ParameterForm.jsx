@@ -1017,6 +1017,11 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   </Select>
                 </FormControl>
               </Grid>
+              <Grid item xs={12}>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 0.5 }}>
+                  Gaussian basis σ range: [σ_min × scale_min, σ_min × scale_max] where σ_min is estimated from PDF
+                </Typography>
+              </Grid>
               <Grid item xs={6}>
                 <TextField
                   fullWidth
@@ -1027,6 +1032,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   onBlur={handleBlur('sigma_min_scale', 0.1)}
                   margin="normal"
                   inputProps={{ step: 'any', min: 0.01 }}
+                  helperText="Min σ multiplier for basis functions"
                 />
               </Grid>
               <Grid item xs={6}>
@@ -1038,7 +1044,8 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   onChange={handleChange('sigma_max_scale')}
                   onBlur={handleBlur('sigma_max_scale', 3.0)}
                   margin="normal"
-                  inputProps={{ step: 'any', min: 1 }}
+                  inputProps={{ step: 'any', min: 0.01 }}
+                  helperText="Max σ multiplier for basis functions"
                 />
               </Grid>
               {formData.objective_mode === 'raw_moments' && (
