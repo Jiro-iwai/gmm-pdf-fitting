@@ -47,6 +47,8 @@ const defaultFormData = {
   use_moment_matching: false,
   qp_mode: 'hard',
   soft_lambda: 1e4,
+  mdn_model_path: './ml_init/checkpoints/mdn_init_v1_N64_K5.pt',
+  mdn_device: 'auto',
   
   // LP parameters
   L: 5,
@@ -126,10 +128,19 @@ const ParameterForm = ({ onSubmit, loading }) => {
         // If invalid, keep previous value
         return prev
       }
-      return {
+      const newData = {
         ...prev,
         [field]: value,
       }
+      // If init is changed to 'mdn', set n_init to 1
+      if (field === 'init' && value === 'mdn') {
+        newData.n_init = 1
+      }
+      // If init is changed from 'mdn' to something else, restore n_init to default
+      if (field === 'init' && value !== 'mdn' && prev.init === 'mdn') {
+        newData.n_init = 8
+      }
+      return newData
     })
   }
 
@@ -279,6 +290,13 @@ const ParameterForm = ({ onSubmit, loading }) => {
         qp_mode: normalizedData.qp_mode,
         soft_lambda: ensureNumber(normalizedData.soft_lambda, 1e4),
       }
+      // Add MDN parameters if init is 'mdn'
+      if (normalizedData.init === 'mdn') {
+        request.em_params.mdn_params = {
+          model_path: normalizedData.mdn_model_path || './ml_init/checkpoints/mdn_init_v1_N64_K5.pt',
+          device: normalizedData.mdn_device || 'auto',
+        }
+      }
     } else if (normalizedData.method === 'lp') {
       request.lp_params = {
         L: ensureNumber(normalizedData.L, 5),
@@ -366,6 +384,18 @@ const ParameterForm = ({ onSubmit, loading }) => {
             qp_mode: config.em_params.qp_mode ?? prev.qp_mode,
             soft_lambda: config.em_params.soft_lambda ?? prev.soft_lambda,
           })
+          // Add MDN parameters if present (from em_params.mdn_params or config.mdn)
+          if (config.em_params.mdn_params) {
+            Object.assign(newData, {
+              mdn_model_path: config.em_params.mdn_params.model_path ?? prev.mdn_model_path,
+              mdn_device: config.em_params.mdn_params.device ?? prev.mdn_device,
+            })
+          } else if (config.mdn) {
+            Object.assign(newData, {
+              mdn_model_path: config.mdn.model_path ?? prev.mdn_model_path,
+              mdn_device: config.mdn.device ?? prev.mdn_device,
+            })
+          }
         } else if (config.method === 'lp' && config.lp_params) {
           Object.assign(newData, {
             L: config.lp_params.L ?? prev.L,
@@ -481,6 +511,13 @@ const ParameterForm = ({ onSubmit, loading }) => {
       config.use_moment_matching = normalizedData.use_moment_matching
       config.qp_mode = normalizedData.qp_mode
       config.soft_lambda = normalizedData.soft_lambda
+      // Add MDN parameters if init is 'mdn'
+      if (normalizedData.init === 'mdn') {
+        config.mdn = {
+          model_path: normalizedData.mdn_model_path || './ml_init/checkpoints/mdn_init_v1_N64_K5.pt',
+          device: normalizedData.mdn_device || 'auto',
+        }
+      }
     } else if (normalizedData.method === 'lp') {
       config.L = normalizedData.L
       config.objective_mode = normalizedData.objective_mode
@@ -770,9 +807,38 @@ const ParameterForm = ({ onSubmit, loading }) => {
                     <MenuItem value="random">Random</MenuItem>
                     <MenuItem value="qmi">QMI</MenuItem>
                     <MenuItem value="wqmi">WQMI</MenuItem>
+                    <MenuItem value="mdn">MDN (Machine Learning)</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
+              {formData.init === 'mdn' && (
+                <>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="MDN Model Path"
+                      value={formData.mdn_model_path || ''}
+                      onChange={handleChange('mdn_model_path')}
+                      helperText="Path to MDN model file (default: ./ml_init/checkpoints/mdn_init_v1_N64_K5.pt)"
+                      margin="normal"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth margin="normal">
+                      <InputLabel>MDN Device</InputLabel>
+                      <Select
+                        value={formData.mdn_device || 'auto'}
+                        onChange={handleChange('mdn_device')}
+                        label="MDN Device"
+                      >
+                        <MenuItem value="auto">Auto</MenuItem>
+                        <MenuItem value="cpu">CPU</MenuItem>
+                        <MenuItem value="cuda">CUDA</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </>
+              )}
               <Grid item xs={12}>
                 <FormControlLabel
                   control={

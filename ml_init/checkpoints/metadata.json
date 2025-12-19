@@ -1,0 +1,20 @@
+{
+  "version": "mdn_init_v1",
+  "N_model": 64,
+  "K_model": 5,
+  "z_min": -8.0,
+  "z_max": 8.0,
+  "sigma_min": 0.001,
+  "reg_var": 1e-06,
+  "input_transform": "pdf",
+  "train_args": {
+    "batch_size": 256,
+    "lr": 0.001,
+    "epochs": 100,
+    "lambda_mom": 0.0,
+    "H": 256
+  },
+  "best_epoch": 98,
+  "best_val_ce": 1.3243746489286423,
+  "created_at": "2025-12-19T10:54:03.334308"
+}

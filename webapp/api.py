@@ -111,6 +111,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         qp_mode = config_dict.get("qp_mode", "hard")
         soft_lambda = config_dict.get("soft_lambda", 1e4)
         
+        # MDN parameters
+        mdn_params = config_dict.get("mdn_params", {})
+        mdn_model_path = mdn_params.get("model_path") if mdn_params else None
+        mdn_device = mdn_params.get("device", "auto") if mdn_params else "auto"
+        
         params, ll, n_iter = fit_gmm1d_to_pdf_weighted_em(
             z, f_true,
             K=K,
@@ -124,6 +129,8 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             use_moment_matching=use_moment_matching,
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
+            mdn_model_path=mdn_model_path,
+            mdn_device=mdn_device,
         )
         total_em_time = time.time() - em_start_time
         
@@ -132,6 +139,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         if use_moment_matching and hasattr(params, '_qp_info'):
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
+        
+        # Get initialization time
+        init_elapsed_time = 0.0
+        if hasattr(params, '_init_time'):
+            init_elapsed_time = params._init_time
         
         # Subtract QP time from total to get pure EM time
         em_elapsed_time = total_em_time - qp_elapsed_time
@@ -287,6 +299,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         qp_mode = config_dict.get("qp_mode", "hard")
         soft_lambda = config_dict.get("soft_lambda", 1e4)
         
+        # MDN parameters (for consistency, though Hybrid uses custom init)
+        mdn_params = config_dict.get("mdn_params", {})
+        mdn_model_path = mdn_params.get("model_path") if mdn_params else None
+        mdn_device = mdn_params.get("device", "auto") if mdn_params else "auto"
+        
         params, ll, n_iter = fit_gmm1d_to_pdf_weighted_em(
             z, f_true,
             K=K,
@@ -300,6 +317,8 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             use_moment_matching=use_moment_matching,
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
+            mdn_model_path=mdn_model_path,
+            mdn_device=mdn_device,
         )
         total_em_time = time.time() - em_start_time
         
@@ -308,6 +327,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         if use_moment_matching and hasattr(params, '_qp_info'):
             qp_info = params._qp_info
             qp_elapsed_time = qp_info.get('qp_time', 0.0)
+        
+        # Get initialization time (for hybrid, init="custom" so should be 0)
+        init_elapsed_time = 0.0
+        if hasattr(params, '_init_time'):
+            init_elapsed_time = params._init_time
         
         # Subtract QP time from total to get pure EM time
         em_elapsed_time = total_em_time - qp_elapsed_time
@@ -372,6 +396,7 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             "em_time": em_elapsed_time,
             "lp_time": lp_elapsed_time if method in ["lp", "hybrid"] else None,
             "qp_time": qp_elapsed_time if qp_elapsed_time > 0 else None,
+            "init_time": init_elapsed_time if method in ["em", "hybrid"] else None,
             "total_time": total_elapsed_time
         },
         "log_likelihood": float(ll_value) if ll_value is not None else None,
@@ -604,6 +629,12 @@ async def compute_gmm(request: ComputeRequest):
                 "qp_mode": request.em_params.qp_mode,
                 "soft_lambda": request.em_params.soft_lambda,
             })
+            # Add MDN parameters if provided
+            if request.em_params.mdn_params:
+                config_dict["mdn_params"] = {
+                    "model_path": request.em_params.mdn_params.model_path,
+                    "device": request.em_params.mdn_params.device,
+                }
         elif request.method == "lp" and request.lp_params:
             config_dict.update({
                 "L": request.lp_params.L,

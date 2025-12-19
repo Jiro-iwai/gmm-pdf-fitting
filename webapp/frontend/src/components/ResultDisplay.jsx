@@ -224,7 +224,19 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
                   : 'N/A'}
               </Typography>
             </Grid>
-            )}
+          )}
+          {executionTime.init_time !== null && executionTime.init_time !== undefined && (
+            <Grid item xs={6} md={3}>
+              <Typography variant="body2" color="textSecondary">
+                Init Time
+              </Typography>
+              <Typography variant="body1">
+                {typeof executionTime.init_time === 'number'
+                  ? `${executionTime.init_time.toFixed(3)}s`
+                  : 'N/A'}
+              </Typography>
+            </Grid>
+          )}
           </Grid>
         </Paper>
       )}
