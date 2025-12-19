@@ -104,12 +104,17 @@ const ParameterForm = ({ onSubmit, loading }) => {
 
   const handleChange = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value
+    
+    // Check if this is a numeric field by looking at defaultFormData
+    const isNumericField = typeof defaultFormData[field] === 'number'
+    
+    if (isNumericField) {
+      // Mark field as being edited (called outside setFormData callback)
+      setEditingFields((prevEditing) => ({ ...prevEditing, [field]: true }))
+    }
+    
     setFormData((prev) => {
-      const prevValue = prev[field]
-      if (typeof prevValue === 'number') {
-        // Mark field as being edited
-        setEditingFields((prevEditing) => ({ ...prevEditing, [field]: true }))
-        
+      if (isNumericField) {
         // Allow empty string and minus sign during editing (store as string temporarily)
         if (value === '' || value === '-') {
           return {
