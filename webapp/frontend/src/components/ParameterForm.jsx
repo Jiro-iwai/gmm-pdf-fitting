@@ -152,12 +152,23 @@ const ParameterForm = ({ onSubmit, loading }) => {
       if (isNumericField) {
         // For exponential fields, allow partial exponential notation during editing
         if (isExponentialField) {
-          // Allow partial exponential input patterns (e.g., "1e", "1e-", "-1e")
+          // Allow partial exponential input patterns (e.g., "1e", "1e-", "-1e", "0.", "0.0")
           const expPartialPattern = /^-?(\d*\.?\d*)(e-?)?(\d*)$/i
           if (value === '' || expPartialPattern.test(value)) {
-            const numValue = parseFloat(value)
-            if (!isNaN(numValue) && isFinite(numValue)) {
-              return { ...prev, [field]: numValue }
+            // Check if input is a partial number (ends with "." or "e" or "e-" or trailing zeros after decimal)
+            const isPartialInput = value === '' || 
+                                   value.endsWith('.') || 
+                                   value.endsWith('e') || 
+                                   value.endsWith('e-') || 
+                                   value.endsWith('E') || 
+                                   value.endsWith('E-') ||
+                                   /\.\d*0$/.test(value)  // e.g., "0.10", "1.00"
+            
+            if (!isPartialInput) {
+              const numValue = parseFloat(value)
+              if (!isNaN(numValue) && isFinite(numValue)) {
+                return { ...prev, [field]: numValue }
+              }
             }
             // Store as string during partial input
             return { ...prev, [field]: value }
