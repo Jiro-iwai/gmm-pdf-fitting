@@ -169,38 +169,86 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
                 {result.method ? result.method.toUpperCase() : 'N/A'}
               </Typography>
             </Grid>
-          {result.log_likelihood !== null && result.log_likelihood !== undefined && (
-            <Grid item xs={6} md={3}>
-              <Typography variant="body2" color="textSecondary">
-                Log-Likelihood
-              </Typography>
-              <Typography variant="body1">
-                {typeof result.log_likelihood === 'number'
-                  ? result.log_likelihood.toFixed(6)
-                  : 'N/A'}
-              </Typography>
-            </Grid>
+          
+          {/* LP-specific information */}
+          {result.method === 'lp' && result.diagnostics && (
+            <>
+              {result.diagnostics.t_pdf !== null && result.diagnostics.t_pdf !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    PDF L∞ Error
+                  </Typography>
+                  <Typography variant="body1">
+                    {typeof result.diagnostics.t_pdf === 'number'
+                      ? result.diagnostics.t_pdf.toExponential(3)
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+              {result.diagnostics.n_nonzero !== null && result.diagnostics.n_nonzero !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Non-zero Components
+                  </Typography>
+                  <Typography variant="body1">
+                    {result.diagnostics.n_nonzero} / {result.diagnostics.n_bases || 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+            </>
           )}
-          {result.n_iterations && (
-            <Grid item xs={6} md={3}>
-              <Typography variant="body2" color="textSecondary">
-                Iterations
-              </Typography>
-              <Typography variant="body1">{result.n_iterations}</Typography>
-            </Grid>
+          
+          {/* EM/Hybrid-specific information */}
+          {(result.method === 'em' || result.method === 'hybrid') && (
+            <>
+              {result.log_likelihood !== null && result.log_likelihood !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Log-Likelihood
+                  </Typography>
+                  <Typography variant="body1">
+                    {typeof result.log_likelihood === 'number'
+                      ? result.log_likelihood.toFixed(6)
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+              {result.n_iterations && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Iterations
+                  </Typography>
+                  <Typography variant="body1">{result.n_iterations}</Typography>
+                </Grid>
+              )}
+              {executionTime.em_time !== null && executionTime.em_time !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    EM Time
+                  </Typography>
+                  <Typography variant="body1">
+                    {typeof executionTime.em_time === 'number'
+                      ? `${executionTime.em_time.toFixed(3)}s`
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+              {executionTime.init_time !== null && executionTime.init_time !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    Init Time
+                  </Typography>
+                  <Typography variant="body1">
+                    {typeof executionTime.init_time === 'number'
+                      ? `${executionTime.init_time.toFixed(3)}s`
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+            </>
           )}
-          {executionTime.em_time !== null && executionTime.em_time !== undefined && (
-            <Grid item xs={6} md={3}>
-              <Typography variant="body2" color="textSecondary">
-                EM Time
-              </Typography>
-              <Typography variant="body1">
-                {typeof executionTime.em_time === 'number'
-                  ? `${executionTime.em_time.toFixed(3)}s`
-                  : 'N/A'}
-              </Typography>
-            </Grid>
-          )}
+          
+          {/* LP Time - shown for both LP and Hybrid */}
           {executionTime.lp_time !== null && executionTime.lp_time !== undefined && (
             <Grid item xs={6} md={3}>
               <Typography variant="body2" color="textSecondary">
@@ -213,6 +261,8 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
               </Typography>
             </Grid>
           )}
+          
+          {/* QP Time - shown for EM/Hybrid with moment matching */}
           {executionTime.qp_time !== null && executionTime.qp_time !== undefined && (
             <Grid item xs={6} md={3}>
               <Typography variant="body2" color="textSecondary">
@@ -225,14 +275,16 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
               </Typography>
             </Grid>
           )}
-          {executionTime.init_time !== null && executionTime.init_time !== undefined && (
+          
+          {/* Total Time */}
+          {executionTime.total_time !== null && executionTime.total_time !== undefined && (
             <Grid item xs={6} md={3}>
               <Typography variant="body2" color="textSecondary">
-                Init Time
+                Total Time
               </Typography>
               <Typography variant="body1">
-                {typeof executionTime.init_time === 'number'
-                  ? `${executionTime.init_time.toFixed(3)}s`
+                {typeof executionTime.total_time === 'number'
+                  ? `${executionTime.total_time.toFixed(3)}s`
                   : 'N/A'}
               </Typography>
             </Grid>
