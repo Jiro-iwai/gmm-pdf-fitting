@@ -8,9 +8,13 @@ from src.gmm_fitting import max_pdf_bivariate_normal, normalize_pdf_on_grid
 
 
 # Parameter ranges (hardcoded for reproducibility)
+# V2: Extended ranges to cover more edge cases
 MU_RANGE = (-3.0, 3.0)
-SIGMA_RANGE = (0.3, 2.0)
+SIGMA_RANGE = (0.15, 2.5)  # Extended: was (0.3, 2.0), now covers smaller variances
 RHO_RANGE = (-0.99, 0.99)
+
+# V2: Sampling strategy options
+SAMPLING_STRATEGY = "uniform"  # "uniform" or "improved"
 
 
 def generate_dataset(
@@ -81,6 +85,80 @@ def generate_dataset(
         print(f"Generated {split_name}: {n_samples} samples -> {output_path}")
 
 
+def _sample_sigma_log_uniform(sigma_min: float, sigma_max: float, rng: np.random.Generator) -> float:
+    """Sample sigma from log-uniform distribution (more small values)."""
+    log_min = np.log(sigma_min)
+    log_max = np.log(sigma_max)
+    return float(np.exp(rng.uniform(log_min, log_max)))
+
+
+def _sample_params_improved(rng: np.random.Generator) -> tuple[float, float, float, float, float]:
+    """
+    Improved parameter sampling strategy.
+    
+    - 50% standard cases: symmetric parameters
+    - 30% asymmetric cases: different X/Y parameters
+    - 20% edge cases: extreme correlations or variance ratios
+    """
+    case_type = rng.random()
+    
+    if case_type < 0.5:
+        # Standard symmetric case
+        mu = rng.uniform(*MU_RANGE)
+        sigma = _sample_sigma_log_uniform(SIGMA_RANGE[0], SIGMA_RANGE[1], rng)
+        rho = rng.uniform(*RHO_RANGE)
+        return mu, sigma, mu, sigma, rho
+    
+    elif case_type < 0.8:
+        # Asymmetric case: different X/Y parameters
+        mu_x = rng.uniform(*MU_RANGE)
+        mu_y = rng.uniform(*MU_RANGE)
+        sigma_x = _sample_sigma_log_uniform(SIGMA_RANGE[0], SIGMA_RANGE[1], rng)
+        sigma_y = _sample_sigma_log_uniform(SIGMA_RANGE[0], SIGMA_RANGE[1], rng)
+        rho = rng.uniform(*RHO_RANGE)
+        return mu_x, sigma_x, mu_y, sigma_y, rho
+    
+    else:
+        # Edge case: extreme parameters
+        edge_type = rng.integers(0, 3)
+        
+        if edge_type == 0:
+            # Extreme correlation
+            mu_x = rng.uniform(*MU_RANGE)
+            mu_y = rng.uniform(*MU_RANGE)
+            sigma_x = _sample_sigma_log_uniform(SIGMA_RANGE[0], SIGMA_RANGE[1], rng)
+            sigma_y = _sample_sigma_log_uniform(SIGMA_RANGE[0], SIGMA_RANGE[1], rng)
+            # High correlation (positive or negative)
+            if rng.random() < 0.5:
+                rho = rng.uniform(0.85, 0.99)
+            else:
+                rho = rng.uniform(-0.99, -0.85)
+            return mu_x, sigma_x, mu_y, sigma_y, rho
+        
+        elif edge_type == 1:
+            # Extreme variance ratio
+            mu_x = rng.uniform(*MU_RANGE)
+            mu_y = rng.uniform(*MU_RANGE)
+            # One sigma very small, one larger
+            if rng.random() < 0.5:
+                sigma_x = _sample_sigma_log_uniform(SIGMA_RANGE[0], 0.3, rng)
+                sigma_y = _sample_sigma_log_uniform(0.8, SIGMA_RANGE[1], rng)
+            else:
+                sigma_x = _sample_sigma_log_uniform(0.8, SIGMA_RANGE[1], rng)
+                sigma_y = _sample_sigma_log_uniform(SIGMA_RANGE[0], 0.3, rng)
+            rho = rng.uniform(*RHO_RANGE)
+            return mu_x, sigma_x, mu_y, sigma_y, rho
+        
+        else:
+            # Very small variance (both)
+            mu_x = rng.uniform(-1.0, 1.0)  # Narrower mean range for small variance
+            mu_y = rng.uniform(-1.0, 1.0)
+            sigma_x = _sample_sigma_log_uniform(SIGMA_RANGE[0], 0.25, rng)
+            sigma_y = _sample_sigma_log_uniform(SIGMA_RANGE[0], 0.25, rng)
+            rho = rng.uniform(*RHO_RANGE)
+            return mu_x, sigma_x, mu_y, sigma_y, rho
+
+
 def _generate_split(
     z: np.ndarray,
     n_samples: int,
@@ -107,19 +185,22 @@ def _generate_split(
     params_array : np.ndarray
         Parameters (mu_x, sigma_x, mu_y, sigma_y, rho), shape (n_samples, 5)
     """
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
     
     N = len(z)
     f_array = np.zeros((n_samples, N))
     params_array = np.zeros((n_samples, 5))
     
     for i in range(n_samples):
-        # Sample parameters
-        mu_x = np.random.uniform(*MU_RANGE)
-        sigma_x = np.random.uniform(*SIGMA_RANGE)
-        mu_y = np.random.uniform(*MU_RANGE)
-        sigma_y = np.random.uniform(*SIGMA_RANGE)
-        rho = np.random.uniform(*RHO_RANGE)
+        if SAMPLING_STRATEGY == "improved":
+            mu_x, sigma_x, mu_y, sigma_y, rho = _sample_params_improved(rng)
+        else:
+            # Legacy uniform sampling
+            mu_x = rng.uniform(*MU_RANGE)
+            sigma_x = rng.uniform(*SIGMA_RANGE)
+            mu_y = rng.uniform(*MU_RANGE)
+            sigma_y = rng.uniform(*SIGMA_RANGE)
+            rho = rng.uniform(*RHO_RANGE)
         
         # Clamp rho to avoid numerical issues
         rho = np.clip(rho, -0.99, 0.99)

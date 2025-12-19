@@ -54,3 +54,6 @@ webapp/frontend/.nyc_output/
 # MDN model files
 ml_init/checkpoints/*.pt
 ml_init/data/*.npz
+ml_init/data_500k/
+ml_init/experiments/
+ml_init/experiments_arch/

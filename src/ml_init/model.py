@@ -9,7 +9,7 @@ class MDNModel(nn.Module):
     """
     Mixture Density Network for GMM initialization.
     
-    2-layer MLP that outputs GMM parameters (mixing weights, means, variances).
+    MLP that outputs GMM parameters (mixing weights, means, variances).
     """
     
     def __init__(
@@ -18,6 +18,8 @@ class MDNModel(nn.Module):
         K: int = 5,
         H: int = 128,
         sigma_min: float = 1e-3,
+        num_layers: int = 2,
+        dropout: float = 0.0,
     ):
         """
         Initialize MDN model.
@@ -32,6 +34,10 @@ class MDNModel(nn.Module):
             Hidden layer dimension
         sigma_min : float
             Minimum standard deviation (sqrt(reg_var))
+        num_layers : int
+            Number of hidden layers (2 or 3)
+        dropout : float
+            Dropout probability (0.0 = no dropout)
         """
         super().__init__()
         
@@ -39,32 +45,37 @@ class MDNModel(nn.Module):
         self.K = K
         self.H = H
         self.sigma_min = sigma_min
+        self.num_layers = num_layers
+        self.dropout_p = dropout
         
-        # Layer 1: N -> H
-        self.fc1 = nn.Linear(N, H)
+        # Build layers dynamically
+        layers = []
+        in_dim = N
+        for i in range(num_layers):
+            layers.append(nn.Linear(in_dim, H))
+            layers.append(nn.ReLU())
+            if dropout > 0:
+                layers.append(nn.Dropout(dropout))
+            in_dim = H
         
-        # Layer 2: H -> H
-        self.fc2 = nn.Linear(H, H)
+        self.hidden = nn.Sequential(*layers)
         
         # Output layer: H -> 3K (alpha, mu, beta)
-        self.fc3 = nn.Linear(H, 3 * K)
+        self.fc_out = nn.Linear(H, 3 * K)
         
         # Initialize weights
         self._initialize_weights()
     
     def _initialize_weights(self):
         """Initialize weights using He (ReLU layers) and Xavier (output layer)."""
-        # He initialization for ReLU layers
-        nn.init.kaiming_uniform_(self.fc1.weight, nonlinearity='relu')
-        nn.init.kaiming_uniform_(self.fc2.weight, nonlinearity='relu')
+        for module in self.hidden:
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
+                nn.init.zeros_(module.bias)
         
         # Xavier initialization for output layer
-        nn.init.xavier_uniform_(self.fc3.weight)
-        
-        # Zero bias initialization
-        nn.init.zeros_(self.fc1.bias)
-        nn.init.zeros_(self.fc2.bias)
-        nn.init.zeros_(self.fc3.bias)
+        nn.init.xavier_uniform_(self.fc_out.weight)
+        nn.init.zeros_(self.fc_out.bias)
     
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -84,12 +95,11 @@ class MDNModel(nn.Module):
         beta : torch.Tensor
             Variance parameter logits, shape (batch_size, K)
         """
-        # Hidden layers with ReLU
-        h1 = F.relu(self.fc1(x))
-        h2 = F.relu(self.fc2(h1))
+        # Hidden layers
+        h = self.hidden(x)
         
         # Output: 3K values
-        output = self.fc3(h2)
+        output = self.fc_out(h)
         
         # Split into alpha, mu, beta
         alpha = output[:, :self.K]

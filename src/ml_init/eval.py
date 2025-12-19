@@ -52,15 +52,36 @@ def load_model_and_metadata(
     z_min = metadata["z_min"]
     z_max = metadata["z_max"]
     
+    # Get model architecture from metadata (with backward compatibility defaults)
+    train_args = metadata.get("train_args", {})
+    H = train_args.get("H", 128)
+    num_layers = train_args.get("num_layers", 2)
+    dropout = train_args.get("dropout", 0.0)
+    
     # Create grid
     z = np.linspace(z_min, z_max, N)
     
     # Create model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = MDNModel(N=N, K=K, H=128, sigma_min=sigma_min).to(device)
+    model = MDNModel(N=N, K=K, H=H, sigma_min=sigma_min, num_layers=num_layers, dropout=dropout).to(device)
     
-    # Load state dict
+    # Load state dict with backward compatibility
     state_dict = torch.load(model_path, map_location=device)
+    
+    # Check if old format (fc1, fc2, fc3) and convert to new format
+    if "fc1.weight" in state_dict and "hidden.0.weight" not in state_dict:
+        # Old format: convert to new
+        new_state_dict = {}
+        new_state_dict["hidden.0.weight"] = state_dict["fc1.weight"]
+        new_state_dict["hidden.0.bias"] = state_dict["fc1.bias"]
+        # Skip ReLU (index 1) and Dropout (index 2 if present)
+        layer_idx = 3 if dropout > 0 else 2
+        new_state_dict[f"hidden.{layer_idx}.weight"] = state_dict["fc2.weight"]
+        new_state_dict[f"hidden.{layer_idx}.bias"] = state_dict["fc2.bias"]
+        new_state_dict["fc_out.weight"] = state_dict["fc3.weight"]
+        new_state_dict["fc_out.bias"] = state_dict["fc3.bias"]
+        state_dict = new_state_dict
+    
     model.load_state_dict(state_dict)
     model.eval()
     
