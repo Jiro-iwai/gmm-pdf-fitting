@@ -26,7 +26,14 @@ const EXPONENTIAL_FIELDS = ['tol', 'reg_var', 'soft_lambda', 'pdf_tolerance']
 // Format number as exponential notation string
 const formatExponential = (value) => {
   if (value === null || value === undefined || value === '') return ''
-  if (typeof value === 'string') return value // During editing, keep as-is
+  // For strings, try to parse and format (unless it's a partial input like "1e-")
+  if (typeof value === 'string') {
+    // Check if it's a partial exponential input (keep as-is during editing)
+    if (value.match(/e-?$/i) || value === '-') return value
+    const parsed = parseFloat(value)
+    if (isNaN(parsed)) return value
+    value = parsed
+  }
   if (value === 0) return '0'
   const num = Number(value)
   if (isNaN(num)) return ''
@@ -132,8 +139,9 @@ const ParameterForm = ({ onSubmit, loading }) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value
     
     // Check if this is a numeric field by looking at defaultFormData
-    const isNumericField = typeof defaultFormData[field] === 'number'
+    // Also treat EXPONENTIAL_FIELDS as numeric (even if defaultFormData has null)
     const isExponentialField = EXPONENTIAL_FIELDS.includes(field)
+    const isNumericField = typeof defaultFormData[field] === 'number' || isExponentialField
     
     if (isNumericField) {
       // Mark field as being edited (called outside setFormData callback)
@@ -1053,6 +1061,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       type="text"
                       value={editingFields.pdf_tolerance ? formData.pdf_tolerance : formatExponential(formData.pdf_tolerance)}
                       onChange={handleChange('pdf_tolerance')}
+                      onBlur={handleBlur('pdf_tolerance', null)}
                       margin="normal"
                       placeholder="e.g., 1e-3 or None"
                       disabled={formData.objective_form === 'B'}
