@@ -974,18 +974,6 @@ const ParameterForm = ({ onSubmit, loading }) => {
           <AccordionDetails>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <TextField
-                  fullWidth
-                  label="L (Sigma Levels)"
-                  type="number"
-                  value={editingFields.L ? formData.L : (typeof formData.L === 'number' ? formData.L : '')}
-                  onChange={handleChange('L')}
-                  onBlur={handleBlur('L', 5)}
-                  margin="normal"
-                  inputProps={{ min: 1 }}
-                />
-              </Grid>
-              <Grid item xs={6}>
                 <FormControl fullWidth margin="normal">
                   <InputLabel>Objective Mode</InputLabel>
                   <Select
@@ -1016,6 +1004,19 @@ const ParameterForm = ({ onSubmit, loading }) => {
                     <MenuItem value="revised simplex">Revised Simplex</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  label="L (Sigma Levels)"
+                  type="number"
+                  value={editingFields.L ? formData.L : (typeof formData.L === 'number' ? formData.L : '')}
+                  onChange={handleChange('L')}
+                  onBlur={handleBlur('L', 5)}
+                  margin="normal"
+                  inputProps={{ min: 1 }}
+                  helperText="Number of σ levels in Gaussian basis dictionary"
+                />
               </Grid>
               <Grid item xs={12}>
                 <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 0.5 }}>
