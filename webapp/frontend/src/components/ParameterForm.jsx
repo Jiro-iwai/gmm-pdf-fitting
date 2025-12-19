@@ -795,23 +795,33 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Initialization</InputLabel>
-                  <Select
-                    value={formData.init}
-                    onChange={handleChange('init')}
-                    label="Initialization"
-                  >
-                    <MenuItem value="quantile">Quantile</MenuItem>
-                    <MenuItem value="random">Random</MenuItem>
-                    <MenuItem value="qmi">QMI</MenuItem>
-                    <MenuItem value="wqmi">WQMI</MenuItem>
-                    <MenuItem value="mdn">MDN (Machine Learning)</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              {formData.init === 'mdn' && (
+              {formData.method === 'hybrid' && (
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1 }}>
+                    Note: Hybrid method uses LP solution as initial values for EM algorithm.
+                    Initialization method selection is not applicable.
+                  </Typography>
+                </Grid>
+              )}
+              {formData.method !== 'hybrid' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth margin="normal">
+                    <InputLabel>Initialization</InputLabel>
+                    <Select
+                      value={formData.init}
+                      onChange={handleChange('init')}
+                      label="Initialization"
+                    >
+                      <MenuItem value="quantile">Quantile</MenuItem>
+                      <MenuItem value="random">Random</MenuItem>
+                      <MenuItem value="qmi">QMI</MenuItem>
+                      <MenuItem value="wqmi">WQMI</MenuItem>
+                      <MenuItem value="mdn">MDN (Machine Learning)</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              {formData.init === 'mdn' && formData.method !== 'hybrid' && (
                 <>
                   <Grid item xs={12}>
                     <TextField
