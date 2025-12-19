@@ -821,6 +821,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   value={editingFields.tol ? formData.tol : formatExponential(formData.tol)}
                   onChange={handleChange('tol')}
                   onBlur={handleBlur('tol', 1e-10)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
                   placeholder="e.g., 1e-10"
                   helperText="Exponential notation (e.g., 1e-10)"
@@ -834,6 +835,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   value={editingFields.reg_var ? formData.reg_var : formatExponential(formData.reg_var)}
                   onChange={handleChange('reg_var')}
                   onBlur={handleBlur('reg_var', 1e-6)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
                   placeholder="e.g., 1e-6"
                   helperText="Exponential notation (e.g., 1e-6)"
@@ -950,6 +952,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       value={editingFields.soft_lambda ? formData.soft_lambda : formatExponential(formData.soft_lambda)}
                       onChange={handleChange('soft_lambda')}
                       onBlur={handleBlur('soft_lambda', 1e4)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
                       placeholder="e.g., 1e4"
                       helperText="Exponential notation (e.g., 1e4)"
@@ -1073,6 +1076,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       value={editingFields.pdf_tolerance ? formData.pdf_tolerance : formatExponential(formData.pdf_tolerance)}
                       onChange={handleChange('pdf_tolerance')}
                       onBlur={handleBlur('pdf_tolerance', null)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
                       placeholder="e.g., 1e-3 or None"
                       disabled={formData.objective_form === 'B'}
