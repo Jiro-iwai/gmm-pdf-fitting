@@ -323,26 +323,44 @@ MDN（Mixture Density Network）初期化を使用すると、EMアルゴリズ�
 
 ```bash
 # 1. 学習データの生成
-python -m ml_init.generate_dataset \
+python -m src.ml_init.dataset \
   --output_dir ./ml_init/data \
   --n_train 80000 --n_val 10000 --n_test 10000 \
   --seed_train 0 --seed_val 1 --seed_test 2 \
   --z_min -8 --z_max 8 --n_points 64
 
 # 2. モデルの学習
-python -m ml_init.train \
+python -m src.ml_init.train train \
   --data_dir ./ml_init/data \
   --output_dir ./ml_init/checkpoints \
   --batch_size 256 \
   --lr 1e-3 \
-  --epochs 20 \
-  --lambda_mom 0.0
+  --epochs 100 \
+  --hidden_size 256 \
+  --optimizer adam \
+  --scheduler none \
+  --num_layers 2 \
+  --dropout 0.0
+
+# オプションの説明:
+# --optimizer: adam, adamw, sgd から選択
+# --scheduler: none, cosine, step, plateau から選択
+# --weight_decay: L2正則化係数（デフォルト: 0.0）
+# --early_stopping: 早期停止のpatience（0=無効）
+# --warmup_epochs: ウォームアップエポック数（0=無効）
+# --num_layers: 隠れ層の数（2または3、デフォルト: 2）
+# --dropout: Dropout確率（0.0=無効、デフォルト: 0.0）
 
 # 3. モデルの評価（オプション）
-python -m ml_init.eval \
+python -m src.ml_init.eval \
   --model_path ./ml_init/checkpoints/mdn_init_v1_N64_K5.pt \
   --data_path ./ml_init/data/test.npz \
   --output_path ./ml_init/eval_results.json
+
+# 4. 学習曲線の可視化（オプション）
+python -m src.ml_init.train plot \
+  --history_path ./ml_init/checkpoints/history.json \
+  --output_path ./ml_init/checkpoints/training_curve.png
 ```
 
 ### 使用方法
@@ -385,11 +403,23 @@ make test-python
 # フロントエンドテストのみ
 make test-frontend
 
-# カバレッジレポート付きで実行
+# カバレッジレポート付きで実行（Pythonのみ）
 make test-cov
+
+# カバレッジレポート付きで全テスト実行（Python + フロントエンド）
+make test-cov-all
+
+# HTMLカバレッジレポートを生成
+make test-cov-html
 
 # 詳細な出力で実行
 make test-verbose
+
+# 高速モード（カバレッジなし）
+make test-fast
+
+# 特定のテストファイルを実行
+make test-specific FILE=tests/test_pdf_calculation.py
 ```
 
 ### テストファイル
@@ -437,7 +467,7 @@ GUIでパラメータを指定し、結果を可視化できるWebアプリケ�
 # 1. 依存パッケージのインストール（初回のみ）
 make webapp-install
 
-# 2. Webアプリの起動
+# 2. Webアプリの起動（バックエンド + フロントエンド）
 make webapp-start
 
 # 3. ブラウザで http://localhost:3000 にアクセス
@@ -448,6 +478,9 @@ make webapp-stop
 # その他のコマンド
 make webapp-status    # ステータス確認
 make webapp-logs      # ログ表示
+make webapp-backend   # バックエンドのみ起動
+make webapp-frontend  # フロントエンドのみ起動
+make webapp-clean     # ログ・PIDファイルをクリーンアップ
 ```
 
 **手動起動:**
