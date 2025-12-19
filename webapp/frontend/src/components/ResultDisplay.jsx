@@ -198,6 +198,34 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
             </>
           )}
           
+          {/* Hybrid-specific LP information */}
+          {result.method === 'hybrid' && result.diagnostics && result.diagnostics.lp_diagnostics && (
+            <>
+              {result.diagnostics.lp_diagnostics.t_pdf !== null && result.diagnostics.lp_diagnostics.t_pdf !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    LP PDF L∞ Error
+                  </Typography>
+                  <Typography variant="body1">
+                    {typeof result.diagnostics.lp_diagnostics.t_pdf === 'number'
+                      ? result.diagnostics.lp_diagnostics.t_pdf.toExponential(3)
+                      : 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+              {result.diagnostics.lp_diagnostics.n_nonzero !== null && result.diagnostics.lp_diagnostics.n_nonzero !== undefined && (
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="textSecondary">
+                    LP Non-zero Components
+                  </Typography>
+                  <Typography variant="body1">
+                    {result.diagnostics.lp_diagnostics.n_nonzero} / {result.diagnostics.lp_diagnostics.n_bases || result.diagnostics.n_dict || 'N/A'}
+                  </Typography>
+                </Grid>
+              )}
+            </>
+          )}
+          
           {/* EM/Hybrid-specific information */}
           {(result.method === 'em' || result.method === 'hybrid') && (
             <>
@@ -233,7 +261,7 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
                   </Typography>
                 </Grid>
               )}
-              {executionTime.init_time !== null && executionTime.init_time !== undefined && (
+              {executionTime.init_time !== null && executionTime.init_time !== undefined && executionTime.init_time > 0 && (
                 <Grid item xs={6} md={3}>
                   <Typography variant="body2" color="textSecondary">
                     Init Time
