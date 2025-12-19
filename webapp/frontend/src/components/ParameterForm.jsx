@@ -924,6 +924,11 @@ const ParameterForm = ({ onSubmit, loading }) => {
                     <MenuItem value="pdf">PDF Error</MenuItem>
                     <MenuItem value="raw_moments">Raw Moments</MenuItem>
                   </Select>
+                  <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
+                    {formData.objective_mode === 'pdf' 
+                      ? 'Minimize PDF L∞ error only'
+                      : 'Minimize raw moment errors (M1-M4) with PDF constraint'}
+                  </Typography>
                 </FormControl>
               </Grid>
               <Grid item xs={6}>
@@ -966,6 +971,12 @@ const ParameterForm = ({ onSubmit, loading }) => {
               </Grid>
               {formData.objective_mode === 'raw_moments' && (
                 <>
+                  <Grid item xs={12}>
+                    <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1 }}>
+                      <strong>Raw Moments Mode:</strong> Minimizes errors in raw moments (M1=mean, M2=variance, M3, M4) 
+                      while satisfying PDF constraints. This is a fully linear LP problem that can be solved efficiently.
+                    </Typography>
+                  </Grid>
                   <Grid item xs={6}>
                     <FormControl fullWidth margin="normal">
                       <InputLabel>Objective Form</InputLabel>
@@ -977,6 +988,11 @@ const ParameterForm = ({ onSubmit, loading }) => {
                         <MenuItem value="A">Form A (PDF constraint)</MenuItem>
                         <MenuItem value="B">Form B (Weighted sum)</MenuItem>
                       </Select>
+                      <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
+                        {formData.objective_form === 'A'
+                          ? 'Form A: Minimize moment errors subject to PDF tolerance constraint'
+                          : 'Form B: Minimize weighted sum of PDF and moment errors'}
+                      </Typography>
                     </FormControl>
                   </Grid>
                   <Grid item xs={6}>
