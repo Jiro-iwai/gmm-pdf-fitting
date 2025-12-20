@@ -54,6 +54,43 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings, actionHandlers, 
         </Paper>
       )}
 
+      {/* GMM Components - Only show if result exists */}
+      {result && gmmComponents.length > 0 && (
+        <Paper sx={{ p: 2, flexShrink: 0 }}>
+          <Typography variant="h6" gutterBottom>
+            GMM Components ({gmmComponents.length})
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Component</TableCell>
+                  <TableCell align="right">π (Weight)</TableCell>
+                  <TableCell align="right">μ (Mean)</TableCell>
+                  <TableCell align="right">σ (Std Dev)</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {gmmComponents.map((comp, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{idx + 1}</TableCell>
+                    <TableCell align="right">
+                      {typeof comp.pi === 'number' ? comp.pi.toFixed(6) : 'N/A'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {typeof comp.mu === 'number' ? comp.mu.toFixed(6) : 'N/A'}
+                    </TableCell>
+                    <TableCell align="right">
+                      {typeof comp.sigma === 'number' ? comp.sigma.toFixed(6) : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
+
       {/* Error Metrics - Only show if result exists */}
       {result && errorMetrics.linf_pdf !== undefined && (
         <Paper sx={{ p: 2, flexShrink: 0 }}>
@@ -118,43 +155,6 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings, actionHandlers, 
               </Card>
             </Grid>
           </Grid>
-        </Paper>
-      )}
-
-      {/* GMM Components - Only show if result exists */}
-      {result && gmmComponents.length > 0 && (
-        <Paper sx={{ p: 2, flexShrink: 0 }}>
-          <Typography variant="h6" gutterBottom>
-            GMM Components ({gmmComponents.length})
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Component</TableCell>
-                  <TableCell align="right">π (Weight)</TableCell>
-                  <TableCell align="right">μ (Mean)</TableCell>
-                  <TableCell align="right">σ (Std Dev)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {gmmComponents.map((comp, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{idx + 1}</TableCell>
-                    <TableCell align="right">
-                      {typeof comp.pi === 'number' ? comp.pi.toFixed(6) : 'N/A'}
-                    </TableCell>
-                    <TableCell align="right">
-                      {typeof comp.mu === 'number' ? comp.mu.toFixed(6) : 'N/A'}
-                    </TableCell>
-                    <TableCell align="right">
-                      {typeof comp.sigma === 'number' ? comp.sigma.toFixed(6) : 'N/A'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
         </Paper>
       )}
 
