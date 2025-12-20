@@ -75,7 +75,7 @@ describe('PlotViewer', () => {
     expect(titles.length).toBeGreaterThan(0)
   })
 
-  test('displays error message when result is null', () => {
+  test('displays placeholder message when result is null', () => {
     renderWithTheme(
       <PlotViewer
         result={null}
@@ -84,7 +84,7 @@ describe('PlotViewer', () => {
       />
     )
 
-    expect(screen.getByText(/plot data not available/i)).toBeInTheDocument()
+    expect(screen.getByText(/configure parameters and click "compute" to see results/i)).toBeInTheDocument()
   })
 
   test('displays error message when data arrays are empty', () => {
@@ -102,7 +102,7 @@ describe('PlotViewer', () => {
       />
     )
 
-    expect(screen.getByText(/invalid data/i)).toBeInTheDocument()
+    expect(screen.getByText(/failed to prepare plot data/i)).toBeInTheDocument()
   })
 
   test('renders scale mode selector', () => {

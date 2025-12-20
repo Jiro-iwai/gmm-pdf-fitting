@@ -69,10 +69,10 @@ describe('ResultDisplay', () => {
       />
     )
 
-    // ResultDisplay returns null when result is null
-    // Check that no plot or statistics are rendered
-    expect(screen.queryByText(/pdf comparison/i)).not.toBeInTheDocument()
+    // PlotViewer is always rendered, but statistics/error metrics are not shown when result is null
+    expect(screen.getByText(/pdf comparison/i)).toBeInTheDocument()
     expect(screen.queryByText(/statistics comparison/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/error metrics/i)).not.toBeInTheDocument()
   })
 
   test('renders plot when result exists', () => {
