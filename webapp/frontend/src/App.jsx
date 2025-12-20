@@ -49,6 +49,8 @@ function App({ toggleColorMode, mode }) {
   const [plotSettings, setPlotSettings] = useState(loadSavedPlotSettings)
   // Ref for ParameterForm to access action handlers
   const parameterFormRef = useRef(null)
+  // State to track when ParameterForm ref is ready (to trigger re-render)
+  const [formReady, setFormReady] = useState(false)
   
   // Save plot settings to localStorage whenever they change
   useEffect(() => {
@@ -58,6 +60,13 @@ function App({ toggleColorMode, mode }) {
       console.warn('Failed to save plot settings:', e)
     }
   }, [plotSettings])
+
+  // Trigger re-render when ParameterForm ref is ready
+  useEffect(() => {
+    if (parameterFormRef.current && !formReady) {
+      setFormReady(true)
+    }
+  })
 
   const handleCompute = async (params) => {
     setLoading(true)
@@ -166,7 +175,7 @@ function App({ toggleColorMode, mode }) {
             result={result} 
             plotSettings={plotSettings}
             setPlotSettings={setPlotSettings}
-            actionHandlers={parameterFormRef.current}
+            actionHandlers={formReady ? parameterFormRef.current : null}
             loading={loading}
           />
         </Box>
