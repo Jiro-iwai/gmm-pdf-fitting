@@ -24,7 +24,8 @@ const STORAGE_KEY = 'gmm-fitting-params'
 const EXPONENTIAL_FIELDS = ['tol', 'reg_var', 'soft_lambda', 'pdf_tolerance']
 
 // Format number as exponential notation string
-const formatExponential = (value) => {
+// For EXPONENTIAL_FIELDS, always use exponential notation to match helper text
+const formatExponential = (value, forceExponential = false) => {
   if (value === null || value === undefined || value === '') return ''
   // For strings, try to parse and format (unless it's a partial input like "1e-")
   if (typeof value === 'string') {
@@ -37,8 +38,8 @@ const formatExponential = (value) => {
   if (value === 0) return '0'
   const num = Number(value)
   if (isNaN(num)) return ''
-  // Use exponential notation for very small or very large numbers
-  if (Math.abs(num) < 0.01 || Math.abs(num) >= 10000) {
+  // Use exponential notation for very small or very large numbers, or if forced
+  if (forceExponential || Math.abs(num) < 0.01 || Math.abs(num) >= 10000) {
     // Convert to exponential notation and remove unnecessary + sign and trailing zeros
     const expStr = num.toExponential()
     // Remove + sign after e (e.g., "1e+4" -> "1e4")
@@ -813,7 +814,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   fullWidth
                   label="Tolerance"
                   type="text"
-                  value={editingFields.tol ? formData.tol : formatExponential(formData.tol)}
+                  value={editingFields.tol ? formData.tol : formatExponential(formData.tol, true)}
                   onChange={handleChange('tol')}
                   onBlur={handleBlur('tol', 1e-10)}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
@@ -827,7 +828,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   fullWidth
                   label="reg_var"
                   type="text"
-                  value={editingFields.reg_var ? formData.reg_var : formatExponential(formData.reg_var)}
+                  value={editingFields.reg_var ? formData.reg_var : formatExponential(formData.reg_var, true)}
                   onChange={handleChange('reg_var')}
                   onBlur={handleBlur('reg_var', 1e-6)}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
@@ -944,7 +945,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       fullWidth
                       label="Soft Lambda"
                       type="text"
-                      value={editingFields.soft_lambda ? formData.soft_lambda : formatExponential(formData.soft_lambda)}
+                      value={editingFields.soft_lambda ? formData.soft_lambda : formatExponential(formData.soft_lambda, true)}
                       onChange={handleChange('soft_lambda')}
                       onBlur={handleBlur('soft_lambda', 1e4)}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
@@ -1076,7 +1077,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       fullWidth
                       label={formData.objective_form === 'A' ? "PDF Tolerance (τ)" : "PDF Tolerance (not used)"}
                       type="text"
-                      value={editingFields.pdf_tolerance ? formData.pdf_tolerance : formatExponential(formData.pdf_tolerance)}
+                      value={editingFields.pdf_tolerance ? formData.pdf_tolerance : formatExponential(formData.pdf_tolerance, true)}
                       onChange={handleChange('pdf_tolerance')}
                       onBlur={handleBlur('pdf_tolerance', null)}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
