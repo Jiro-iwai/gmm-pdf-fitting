@@ -834,7 +834,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
                   placeholder="e.g., 1e-6"
-                  helperText="Exponential notation (e.g., 1e-6)"
+                  helperText="Regularization variance: Minimum variance floor for GMM components to prevent numerical instability. Exponential notation (e.g., 1e-6)"
                 />
               </Grid>
               <Grid item xs={6}>
@@ -847,6 +847,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                   onBlur={handleBlur('n_init', 8)}
                   margin="normal"
                   inputProps={{ min: 1 }}
+                  helperText="Number of initializations: EM algorithm runs with multiple random initializations and selects the best result. Set to 1 when using MDN initialization."
                 />
               </Grid>
               <Grid item xs={6}>
