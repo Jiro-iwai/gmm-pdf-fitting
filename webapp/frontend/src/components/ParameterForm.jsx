@@ -1121,8 +1121,6 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
 
     </Box>
   )
-}
-
 })
 
 ParameterForm.displayName = 'ParameterForm'

@@ -30,18 +30,16 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings, actionHandlers, 
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {/* Plot - Only show if result exists */}
-      {result && (
-        <Paper sx={{ p: 2, flexShrink: 0 }}>
-          <PlotViewer 
-            result={result} 
-            plotSettings={plotSettings} 
-            setPlotSettings={setPlotSettings}
-            actionHandlers={actionHandlers}
-            loading={loading}
-          />
-        </Paper>
-      )}
+      {/* Plot - Always show PlotViewer to display action buttons */}
+      <Paper sx={{ p: 2, flexShrink: 0 }}>
+        <PlotViewer 
+          result={result} 
+          plotSettings={plotSettings} 
+          setPlotSettings={setPlotSettings}
+          actionHandlers={actionHandlers}
+          loading={loading}
+        />
+      </Paper>
 
       {/* Statistics Comparison */}
       {hasStatistics && (

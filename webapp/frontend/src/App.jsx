@@ -169,14 +169,6 @@ function App({ toggleColorMode, mode }) {
             actionHandlers={parameterFormRef.current}
             loading={loading}
           />
-
-          {!result && !error && !loading && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="body1" color="text.secondary" align="center">
-                Configure parameters and click "Compute" to see results
-              </Typography>
-            </Paper>
-          )}
         </Box>
       </Box>
     </Container>

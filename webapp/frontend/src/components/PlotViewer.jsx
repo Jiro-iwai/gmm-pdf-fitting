@@ -685,7 +685,7 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
 
       <Divider sx={{ my: 2 }} />
 
-      <Box sx={{ minHeight: 500, width: '100%' }}>
+      <Box sx={{ minHeight: 500, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {plotData && plotData.length > 0 ? (
           <Plot
             key={`plot-${revision}`}
@@ -700,8 +700,12 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
             style={{ width: '100%', minHeight: 500 }}
             useResizeHandler={true}
           />
-        ) : (
+        ) : result ? (
           <Typography color="error">Failed to prepare plot data</Typography>
+        ) : (
+          <Typography variant="body1" color="text.secondary" align="center">
+            Configure parameters and click "Compute" to see results
+          </Typography>
         )}
       </Box>
     </Box>
