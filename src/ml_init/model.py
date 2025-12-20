@@ -5,6 +5,27 @@ import torch.nn.functional as F
 import numpy as np
 
 
+class ResidualBlock(nn.Module):
+    """Residual block with optional Layer Normalization (Pre-LN style)."""
+    
+    def __init__(self, dim: int, dropout: float = 0.0, use_layernorm: bool = True):
+        super().__init__()
+        self.use_layernorm = use_layernorm
+        if use_layernorm:
+            self.norm = nn.LayerNorm(dim)
+        self.linear = nn.Linear(dim, dim)
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else None
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = x
+        if self.use_layernorm:
+            h = self.norm(h)
+        h = F.relu(self.linear(h))
+        if self.dropout:
+            h = self.dropout(h)
+        return x + h  # Residual connection
+
+
 class MDNModel(nn.Module):
     """
     Mixture Density Network for GMM initialization.
@@ -20,6 +41,9 @@ class MDNModel(nn.Module):
         sigma_min: float = 1e-3,
         num_layers: int = 2,
         dropout: float = 0.0,
+        use_moments_input: bool = False,
+        use_layernorm: bool = False,
+        use_residual: bool = False,
     ):
         """
         Initialize MDN model.
@@ -38,6 +62,13 @@ class MDNModel(nn.Module):
             Number of hidden layers (2 or 3)
         dropout : float
             Dropout probability (0.0 = no dropout)
+        use_moments_input : bool
+            If True, expects input of shape (batch_size, N + 4) where
+            the last 4 features are moments M1, M2, M3, M4
+        use_layernorm : bool
+            If True, apply Layer Normalization
+        use_residual : bool
+            If True, use residual connections
         """
         super().__init__()
         
@@ -47,18 +78,40 @@ class MDNModel(nn.Module):
         self.sigma_min = sigma_min
         self.num_layers = num_layers
         self.dropout_p = dropout
+        self.use_moments_input = use_moments_input
+        self.use_layernorm = use_layernorm
+        self.use_residual = use_residual
         
-        # Build layers dynamically
-        layers = []
-        in_dim = N
-        for i in range(num_layers):
-            layers.append(nn.Linear(in_dim, H))
-            layers.append(nn.ReLU())
-            if dropout > 0:
-                layers.append(nn.Dropout(dropout))
-            in_dim = H
+        # Input dimension: N + 4 if using moments, else N
+        input_dim = N + 4 if use_moments_input else N
         
-        self.hidden = nn.Sequential(*layers)
+        if use_residual:
+            # Residual architecture: input projection + residual blocks
+            self.input_proj = nn.Linear(input_dim, H)
+            self.blocks = nn.ModuleList([
+                ResidualBlock(H, dropout, use_layernorm)
+                for _ in range(num_layers)
+            ])
+            self.hidden = None  # Not used in residual mode
+            # Final layer norm before output
+            self.final_norm = nn.LayerNorm(H) if use_layernorm else None
+        else:
+            # Standard MLP architecture
+            layers = []
+            in_dim = input_dim
+            for i in range(num_layers):
+                if use_layernorm and i > 0:
+                    layers.append(nn.LayerNorm(H))
+                layers.append(nn.Linear(in_dim, H))
+                layers.append(nn.ReLU())
+                if dropout > 0:
+                    layers.append(nn.Dropout(dropout))
+                in_dim = H
+            
+            self.hidden = nn.Sequential(*layers)
+            self.input_proj = None
+            self.blocks = None
+            self.final_norm = nn.LayerNorm(H) if use_layernorm else None
         
         # Output layer: H -> 3K (alpha, mu, beta)
         self.fc_out = nn.Linear(H, 3 * K)
@@ -68,10 +121,17 @@ class MDNModel(nn.Module):
     
     def _initialize_weights(self):
         """Initialize weights using He (ReLU layers) and Xavier (output layer)."""
-        for module in self.hidden:
-            if isinstance(module, nn.Linear):
-                nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
-                nn.init.zeros_(module.bias)
+        if self.use_residual:
+            nn.init.kaiming_uniform_(self.input_proj.weight, nonlinearity='relu')
+            nn.init.zeros_(self.input_proj.bias)
+            for block in self.blocks:
+                nn.init.kaiming_uniform_(block.linear.weight, nonlinearity='relu')
+                nn.init.zeros_(block.linear.bias)
+        else:
+            for module in self.hidden:
+                if isinstance(module, nn.Linear):
+                    nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
+                    nn.init.zeros_(module.bias)
         
         # Xavier initialization for output layer
         nn.init.xavier_uniform_(self.fc_out.weight)
@@ -95,8 +155,18 @@ class MDNModel(nn.Module):
         beta : torch.Tensor
             Variance parameter logits, shape (batch_size, K)
         """
-        # Hidden layers
-        h = self.hidden(x)
+        if self.use_residual:
+            # Residual architecture
+            h = F.relu(self.input_proj(x))
+            for block in self.blocks:
+                h = block(h)
+            if self.final_norm:
+                h = self.final_norm(h)
+        else:
+            # Standard MLP
+            h = self.hidden(x)
+            if self.final_norm:
+                h = self.final_norm(h)
         
         # Output: 3K values
         output = self.fc_out(h)

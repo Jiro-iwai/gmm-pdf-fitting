@@ -754,8 +754,8 @@ def fit_gmm1d_to_pdf_weighted_em(
                 elif "MDN_MODEL_PATH" in os.environ:
                     model_path = Path(os.environ["MDN_MODEL_PATH"])
                 else:
-                    # Default path: ./ml_init/checkpoints/mdn_init_v1_N64_K5.pt
-                    model_path = Path("ml_init/checkpoints/mdn_init_v1_N64_K5.pt")
+                    # Default path: ./ml_init/checkpoints_v5 (directory containing model and metadata)
+                    model_path = Path("ml_init/checkpoints_v5")
                 
                 # Try MDN prediction
                 try:

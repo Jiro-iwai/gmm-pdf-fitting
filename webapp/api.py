@@ -528,7 +528,7 @@ async def load_config_file(file: UploadFile = File(...)):
                 "z_range": config.get("z_range", [-6.0, 8.0]),
                 "z_npoints": config.get("z_npoints", 2500),
             },
-            "K": config.get("K", 3),
+            "K": config.get("K", 5),
             "method": config.get("method", "em"),
             "show_grid_points": config.get("show_grid_points", True),
             "max_grid_points_display": config.get("max_grid_points_display", 200),

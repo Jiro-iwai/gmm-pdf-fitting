@@ -16,6 +16,70 @@ class MDNInitError(RuntimeError):
     pass
 
 
+def _compute_m1(z: np.ndarray, f: np.ndarray) -> float:
+    """
+    Compute first moment (mean) of PDF.
+    
+    Parameters:
+    -----------
+    z : np.ndarray
+        Grid points, shape (N,)
+    f : np.ndarray
+        PDF values, shape (N,)
+    
+    Returns:
+    --------
+    m1 : float
+        First moment E[Z] = ∫ z f(z) dz
+    """
+    return float(np.trapezoid(z * f, z))
+
+
+def _shift_pdf_to_relative(
+    z_orig: np.ndarray,
+    f_orig: np.ndarray,
+    m1: float,
+    z_target: np.ndarray,
+) -> np.ndarray:
+    """
+    Shift PDF to relative coordinates (centered at M1=0) and interpolate to target grid.
+    
+    Parameters:
+    -----------
+    z_orig : np.ndarray
+        Original grid points, shape (N,)
+    f_orig : np.ndarray
+        Original PDF values, shape (N,)
+    m1 : float
+        First moment of original PDF
+    z_target : np.ndarray
+        Target grid points, shape (N_target,)
+    
+    Returns:
+    --------
+    f_shifted : np.ndarray
+        Shifted and interpolated PDF, shape (N_target,)
+    """
+    # Shift grid to relative coordinates
+    z_shifted = z_orig - m1
+    
+    # Interpolate to target grid
+    f_shifted = np.interp(z_target, z_shifted, f_orig, left=0.0, right=0.0)
+    
+    # Ensure non-negative
+    f_shifted = np.maximum(f_shifted, 0.0)
+    
+    # Re-normalize
+    integral = np.trapezoid(f_shifted, z_target)
+    if integral > 0:
+        f_shifted = f_shifted / integral
+    else:
+        # Fallback: uniform distribution
+        f_shifted = np.ones_like(f_shifted) / (z_target[-1] - z_target[0])
+    
+    return f_shifted
+
+
 # Module-level cache for loaded models
 _model_cache: dict[str, Tuple[MDNModel, dict, np.ndarray]] = {}
 
@@ -226,6 +290,9 @@ def mdn_predict_init(
                 f"path={model_path}"
             )
         
+        # Check coordinate mode (default to "absolute" for backward compatibility)
+        coordinate_mode = metadata.get("coordinate_mode", "absolute")
+        
         # Resample to model's grid if needed
         if len(z) != len(z_model) or not np.allclose(z, z_model):
             f_resampled = _resample_to_fixed_grid(z, f, z_model)
@@ -245,6 +312,14 @@ def mdn_predict_init(
                 f"path={model_path}"
             )
         
+        # Apply coordinate transformation for relative mode
+        m1_offset = 0.0
+        if coordinate_mode == "relative":
+            # Compute M1 of input PDF
+            m1_offset = _compute_m1(z_model, f_resampled)
+            # Shift PDF to relative coordinates (M1 → 0)
+            f_resampled = _shift_pdf_to_relative(z_model, f_resampled, m1_offset, z_model)
+        
         # Convert to tensor
         z_torch = torch.from_numpy(z_model).float().to(device)
         f_torch = torch.from_numpy(f_resampled).float().unsqueeze(0).to(device)
@@ -259,6 +334,10 @@ def mdn_predict_init(
         pi_np = pi[0].cpu().numpy()
         mu_np = mu[0].cpu().numpy()
         sigma_np = sigma[0].cpu().numpy()
+        
+        # Inverse transform for relative mode: shift mu back to absolute coordinates
+        if coordinate_mode == "relative":
+            mu_np = mu_np + m1_offset
         
         # Check for NaN/Inf
         if not (np.all(np.isfinite(pi_np)) and 
