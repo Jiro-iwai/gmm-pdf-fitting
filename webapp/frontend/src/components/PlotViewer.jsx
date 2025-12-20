@@ -120,29 +120,19 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
     scaleMode
   ])
 
-  if (!result || !result.z || !result.f_true || !result.f_hat) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Typography color="text.secondary">Plot data not available</Typography>
-      </Box>
-    )
-  }
+  // Check if we have valid plot data
+  const hasValidData = result && result.z && result.f_true && result.f_hat
 
-  const { z, f_true, f_hat } = result
+  // Extract data only if valid
+  const z = hasValidData ? result.z : []
+  const f_true = hasValidData ? result.f_true : []
+  const f_hat = hasValidData ? result.f_hat : []
   const zArray = Array.isArray(z) ? z : []
   const fTrueArray = Array.isArray(f_true) ? f_true : []
   const fHatArray = Array.isArray(f_hat) ? f_hat : []
 
-  // Validate data arrays
-  if (zArray.length === 0 || fTrueArray.length === 0 || fHatArray.length === 0) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Typography color="error">
-          Invalid data: z={zArray.length}, f_true={fTrueArray.length}, f_hat={fHatArray.length}
-        </Typography>
-      </Box>
-    )
-  }
+  // Check for valid array lengths
+  const hasValidArrays = zArray.length > 0 && fTrueArray.length > 0 && fHatArray.length > 0
 
   // Prepare grid points for display (memoized to recalculate when settings change)
   const { zDisplay, fTrueDisplay } = useMemo(() => {
@@ -686,7 +676,7 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
       <Divider sx={{ my: 2 }} />
 
       <Box sx={{ minHeight: 500, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {plotData && plotData.length > 0 ? (
+        {hasValidArrays && plotData && plotData.length > 0 ? (
           <Plot
             key={`plot-${revision}`}
             data={plotData}
@@ -700,7 +690,7 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
             style={{ width: '100%', minHeight: 500 }}
             useResizeHandler={true}
           />
-        ) : result ? (
+        ) : result && !hasValidArrays ? (
           <Typography color="error">Failed to prepare plot data</Typography>
         ) : (
           <Typography variant="body1" color="text.secondary" align="center">
