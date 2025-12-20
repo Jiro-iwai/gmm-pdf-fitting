@@ -15,6 +15,7 @@ import {
   Switch,
   FormControlLabel,
   Divider,
+  FormHelperText,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 
@@ -939,6 +940,9 @@ const ParameterForm = ({ onSubmit, loading }) => {
                         <MenuItem value="hard">Hard</MenuItem>
                         <MenuItem value="soft">Soft</MenuItem>
                       </Select>
+                      <FormHelperText>
+                        Mode for moment matching QP constraints: 'Hard' enforces exact moment matching (may be infeasible), 'Soft' allows violations with penalty (controlled by Soft Lambda)
+                      </FormHelperText>
                     </FormControl>
                   </Grid>
                   <Grid item xs={6}>
