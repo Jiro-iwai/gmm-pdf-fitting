@@ -952,7 +952,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
                       placeholder="e.g., 1e4"
-                      helperText="Exponential notation (e.g., 1e4)"
+                      helperText="Penalty coefficient for soft moment matching constraints in QP. Higher values enforce stricter moment matching. Only used when QP Mode is 'soft'. Exponential notation (e.g., 1e4)"
                     />
                   </Grid>
                 </>
