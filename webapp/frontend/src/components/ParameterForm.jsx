@@ -150,27 +150,13 @@ const ParameterForm = ({ onSubmit, loading }) => {
     
     setFormData((prev) => {
       if (isNumericField) {
-        // For exponential fields, allow partial exponential notation during editing
+        // For exponential fields, keep as string during editing to preserve exponential notation
         if (isExponentialField) {
           // Allow partial exponential input patterns (e.g., "1e", "1e-", "-1e", "0.", "0.0")
           const expPartialPattern = /^-?(\d*\.?\d*)(e-?)?(\d*)$/i
           if (value === '' || expPartialPattern.test(value)) {
-            // Check if input is a partial number (ends with "." or "e" or "e-" or trailing zeros after decimal)
-            const isPartialInput = value === '' || 
-                                   value.endsWith('.') || 
-                                   value.endsWith('e') || 
-                                   value.endsWith('e-') || 
-                                   value.endsWith('E') || 
-                                   value.endsWith('E-') ||
-                                   /\.\d*0$/.test(value)  // e.g., "0.10", "1.00"
-            
-            if (!isPartialInput) {
-              const numValue = parseFloat(value)
-              if (!isNaN(numValue) && isFinite(numValue)) {
-                return { ...prev, [field]: numValue }
-              }
-            }
-            // Store as string during partial input
+            // Always store as string during editing to preserve exponential notation (e.g., "1e-5")
+            // Conversion to number happens in handleBlur
             return { ...prev, [field]: value }
           }
           return prev
