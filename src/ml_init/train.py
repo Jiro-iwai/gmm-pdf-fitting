@@ -12,6 +12,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 from src.ml_init.model import MDNModel, log_gmm_pdf
+from src.ml_init.dataset import COORDINATE_MODE
 from src.ml_init.metrics import (
     compute_pdf_linf_error,
     compute_cdf_linf_error,
@@ -23,7 +24,7 @@ from src.ml_init.metrics import (
 class PDFDataset(Dataset):
     """Dataset for PDF values."""
     
-    def __init__(self, z: np.ndarray, f: np.ndarray):
+    def __init__(self, z: np.ndarray, f: np.ndarray, use_moments: bool = False):
         """
         Initialize dataset.
         
@@ -33,21 +34,53 @@ class PDFDataset(Dataset):
             Grid points, shape (N,)
         f : np.ndarray
             PDF values, shape (n_samples, N)
+        use_moments : bool
+            If True, compute and append moments (M1-M4) to each sample
         """
         self.z = torch.from_numpy(z).float()
         self.f = torch.from_numpy(f).float()
+        self.use_moments = use_moments
+        
+        if use_moments:
+            # Pre-compute moments for all samples
+            self.moments = self._compute_all_moments(z, f)
+        else:
+            self.moments = None
+    
+    def _compute_all_moments(self, z: np.ndarray, f: np.ndarray) -> torch.Tensor:
+        """Compute moments M1-M4 for all samples."""
+        # Integration weights (trapezoidal rule)
+        dz = z[1] - z[0]
+        w = np.ones(len(z)) * dz
+        w[0] = w[-1] = dz / 2
+        
+        moments_list = []
+        for n in range(1, 5):  # M1, M2, M3, M4
+            # M_n = ∫ z^n * f(z) dz
+            m_n = np.sum(f * (z ** n) * w, axis=1)
+            moments_list.append(m_n)
+        
+        # Stack: (n_samples, 4)
+        moments = np.stack(moments_list, axis=1)
+        return torch.from_numpy(moments).float()
     
     def __len__(self):
         return len(self.f)
     
     def __getitem__(self, idx):
-        return self.z, self.f[idx]
+        if self.use_moments:
+            # Concatenate PDF and moments
+            f_with_moments = torch.cat([self.f[idx], self.moments[idx]], dim=0)
+            return self.z, f_with_moments
+        else:
+            return self.z, self.f[idx]
 
 
 def load_dataset(
     data_dir: Path,
     batch_size: int = 256,
     num_workers: int = 0,
+    use_moments: bool = False,
 ) -> tuple[DataLoader, DataLoader, DataLoader, np.ndarray]:
     """
     Load dataset from .npz files.
@@ -60,6 +93,8 @@ def load_dataset(
         Batch size
     num_workers : int
         Number of workers for DataLoader
+    use_moments : bool
+        If True, add moment features (M1-M4) to input
     
     Returns:
     --------
@@ -80,9 +115,9 @@ def load_dataset(
     f_test = test_data["f"]
     
     # Create datasets
-    train_dataset = PDFDataset(z, f_train)
-    val_dataset = PDFDataset(z, f_val)
-    test_dataset = PDFDataset(z, f_test)
+    train_dataset = PDFDataset(z, f_train, use_moments=use_moments)
+    val_dataset = PDFDataset(z, f_val, use_moments=use_moments)
+    test_dataset = PDFDataset(z, f_test, use_moments=use_moments)
     
     # Create loaders
     train_loader = DataLoader(
@@ -114,10 +149,13 @@ def compute_loss(
     mu: torch.Tensor,
     beta: torch.Tensor,
     sigma_min: float,
+    lambda_ce: float = 1.0,
     lambda_mom: float = 0.0,
+    lambda_pdf: float = 0.0,
+    pdf_loss_type: str = "l2",
 ) -> tuple[torch.Tensor, dict]:
     """
-    Compute loss (cross-entropy + optional moment penalty).
+    Compute loss (cross-entropy + optional moment penalty + optional PDF reconstruction loss).
     
     Parameters:
     -----------
@@ -133,8 +171,14 @@ def compute_loss(
         Variance parameter logits, shape (batch_size, K)
     sigma_min : float
         Minimum standard deviation
+    lambda_ce : float
+        Cross-entropy loss coefficient (0.0 to disable CE loss)
     lambda_mom : float
         Moment penalty coefficient
+    lambda_pdf : float
+        PDF reconstruction loss coefficient
+    pdf_loss_type : str
+        PDF loss type: "l2" (MSE), "l1" (MAE), or "linf" (max error)
     
     Returns:
     --------
@@ -181,11 +225,31 @@ def compute_loss(
             ((m_hat - m_true) ** 2).mean() for m_true, m_hat in zip(moments_true, moments_hat)
         )
     
-    total_loss = ce_loss + lambda_mom * mom_loss
+    # PDF reconstruction loss (optional)
+    pdf_loss = torch.tensor(0.0, device=z.device)
+    if lambda_pdf > 0:
+        diff = f_hat - f_true
+        if pdf_loss_type == "l2":
+            # L2 loss (MSE)
+            pdf_loss = (diff ** 2).mean()
+        elif pdf_loss_type == "l1":
+            # L1 loss (MAE)
+            pdf_loss = torch.abs(diff).mean()
+        elif pdf_loss_type == "linf":
+            # Approximate L∞ loss using smooth max
+            # Use log-sum-exp as smooth approximation of max
+            alpha_smooth = 10.0  # Temperature for smooth max
+            abs_diff = torch.abs(diff)
+            pdf_loss = torch.logsumexp(alpha_smooth * abs_diff, dim=1).mean() / alpha_smooth
+        else:
+            raise ValueError(f"Unknown pdf_loss_type: {pdf_loss_type}")
+    
+    total_loss = lambda_ce * ce_loss + lambda_mom * mom_loss + lambda_pdf * pdf_loss
     
     info = {
-        "ce_loss": ce_loss.item(),
+        "ce_loss": ce_loss.item() if lambda_ce > 0 else 0.0,
         "mom_loss": mom_loss.item() if lambda_mom > 0 else 0.0,
+        "pdf_loss": pdf_loss.item() if lambda_pdf > 0 else 0.0,
         "total_loss": total_loss.item(),
     }
     
@@ -198,7 +262,10 @@ def train_mdn_model(
     batch_size: int = 256,
     lr: float = 1e-3,
     epochs: int = 20,
+    lambda_ce: float = 1.0,
     lambda_mom: float = 0.0,
+    lambda_pdf: float = 0.0,
+    pdf_loss_type: str = "l2",
     N: int = 64,
     K: int = 5,
     H: int = 128,
@@ -217,6 +284,12 @@ def train_mdn_model(
     # Model architecture options
     num_layers: int = 2,
     dropout: float = 0.0,
+    use_layernorm: bool = False,
+    use_residual: bool = False,
+    # Input feature options
+    use_moments_input: bool = False,
+    # Best model selection
+    best_metric: str = "val_loss",  # "val_loss" or "pdf_linf"
 ) -> None:
     """
     Train MDN model.
@@ -233,8 +306,14 @@ def train_mdn_model(
         Learning rate
     epochs : int
         Number of epochs
+    lambda_ce : float
+        Cross-entropy loss coefficient (0.0 to disable CE loss)
     lambda_mom : float
-        Moment penalty coefficient
+        Moment penalty coefficient (in loss function)
+    lambda_pdf : float
+        PDF reconstruction loss coefficient
+    pdf_loss_type : str
+        PDF loss type: "l2" (MSE), "l1" (MAE), or "linf"
     N : int
         Input dimension
     K : int
@@ -267,19 +346,37 @@ def train_mdn_model(
         Number of hidden layers (2 or 3)
     dropout : float
         Dropout probability (0.0 = disabled)
+    use_layernorm : bool
+        Whether to use Layer Normalization
+    use_residual : bool
+        Whether to use residual connections
+    use_moments_input : bool
+        Whether to add moment features (M1-M4) to input
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Load dataset
     train_loader, val_loader, test_loader, z = load_dataset(
-        data_dir, batch_size, num_workers
+        data_dir, batch_size, num_workers, use_moments=use_moments_input
     )
     z_torch = torch.from_numpy(z).float()
     
+    # Get N from data (overrides argument if different)
+    N_data = len(z)
+    if N != N_data:
+        print(f"Note: N from data ({N_data}) differs from argument ({N}). Using N={N_data}.")
+        N = N_data
+    
     # Create model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = MDNModel(N=N, K=K, H=H, sigma_min=sigma_min, num_layers=num_layers, dropout=dropout).to(device)
+    model = MDNModel(
+        N=N, K=K, H=H, sigma_min=sigma_min, 
+        num_layers=num_layers, dropout=dropout,
+        use_moments_input=use_moments_input,
+        use_layernorm=use_layernorm,
+        use_residual=use_residual,
+    ).to(device)
     z_torch = z_torch.to(device)
     
     # Optimizer
@@ -307,6 +404,7 @@ def train_mdn_model(
     
     # Training loop
     best_val_ce = float('inf')
+    best_pdf_linf = float('inf')
     best_epoch = -1
     epochs_without_improvement = 0
     base_lr = lr
@@ -353,10 +451,19 @@ def train_mdn_model(
             z_batch = z_batch[0].to(device)  # All samples share same z
             f_batch = f_batch.to(device)
             
+            # If using moments, split input for model vs loss computation
+            if use_moments_input:
+                f_for_loss = f_batch[:, :N]  # PDF only (for loss computation)
+                f_for_model = f_batch  # PDF + moments (for model input)
+            else:
+                f_for_loss = f_batch
+                f_for_model = f_batch
+            
             optimizer.zero_grad()
-            alpha, mu, beta = model(f_batch)
+            alpha, mu, beta = model(f_for_model)
             loss, loss_info = compute_loss(
-                z_batch, f_batch, alpha, mu, beta, sigma_min, lambda_mom
+                z_batch, f_for_loss, alpha, mu, beta, sigma_min, 
+                lambda_ce, lambda_mom, lambda_pdf, pdf_loss_type
             )
             loss.backward()
             
@@ -376,9 +483,18 @@ def train_mdn_model(
                 z_batch = z_batch[0].to(device)
                 f_batch = f_batch.to(device)
                 
-                alpha, mu, beta = model(f_batch)
+                # If using moments, split input for model vs loss computation
+                if use_moments_input:
+                    f_for_loss = f_batch[:, :N]
+                    f_for_model = f_batch
+                else:
+                    f_for_loss = f_batch
+                    f_for_model = f_batch
+                
+                alpha, mu, beta = model(f_for_model)
                 loss, loss_info = compute_loss(
-                    z_batch, f_batch, alpha, mu, beta, sigma_min, lambda_mom
+                    z_batch, f_for_loss, alpha, mu, beta, sigma_min,
+                    lambda_ce, lambda_mom, lambda_pdf, pdf_loss_type
                 )
                 val_losses.append(loss_info["ce_loss"])
         
@@ -393,12 +509,21 @@ def train_mdn_model(
                 
                 if len(f_subset_list) > 0:
                     f_subset = torch.cat(f_subset_list, dim=0)
-                    alpha_subset, mu_subset, beta_subset = model(f_subset)
+                    
+                    # If using moments, split for model input
+                    if use_moments_input:
+                        f_for_model = f_subset
+                        f_for_metrics = f_subset[:, :N]  # PDF only
+                    else:
+                        f_for_model = f_subset
+                        f_for_metrics = f_subset
+                    
+                    alpha_subset, mu_subset, beta_subset = model(f_for_model)
                     pi_subset = torch.softmax(alpha_subset, dim=-1)
                     sigma_subset = torch.nn.functional.softplus(beta_subset) + sigma_min
                     
                     # Compute metrics for first sample
-                    f_true_np = f_subset[0].cpu().numpy()
+                    f_true_np = f_for_metrics[0].cpu().numpy()
                     log_f_hat = log_gmm_pdf(z_subset, pi_subset[0:1], mu_subset[0:1], sigma_subset[0:1])
                     f_hat_np = torch.exp(log_f_hat[0]).cpu().numpy()
                     
@@ -423,9 +548,18 @@ def train_mdn_model(
             print(f"  val_metrics: PDF L∞={val_metrics.get('pdf_linf', 0):.6f}, "
                   f"CDF L∞={val_metrics.get('cdf_linf', 0):.6f}")
         
-        # Save best model
-        if val_loss < best_val_ce:
+        # Save best model based on selected metric
+        current_pdf_linf = val_metrics.get('pdf_linf', float('inf')) if val_metrics else float('inf')
+        
+        # Determine if this is the best model
+        if best_metric == "pdf_linf":
+            is_best = current_pdf_linf < best_pdf_linf
+        else:  # val_loss
+            is_best = val_loss < best_val_ce
+        
+        if is_best:
             best_val_ce = val_loss
+            best_pdf_linf = current_pdf_linf
             best_epoch = epoch
             
             checkpoint_path = output_dir / f"mdn_init_v1_N{N}_K{K}.pt"
@@ -440,15 +574,22 @@ def train_mdn_model(
                 "z_max": float(z[-1]),
                 "sigma_min": sigma_min,
                 "reg_var": sigma_min ** 2,
-                "input_transform": "pdf",
+                "input_transform": "pdf_with_moments" if use_moments_input else "pdf",
+                "coordinate_mode": COORDINATE_MODE,
+                "use_moments_input": use_moments_input,
                 "train_args": {
                     "batch_size": batch_size,
                     "lr": lr,
                     "epochs": epochs,
+                    "lambda_ce": lambda_ce,
                     "lambda_mom": lambda_mom,
+                    "lambda_pdf": lambda_pdf,
+                    "pdf_loss_type": pdf_loss_type,
                     "H": H,
                     "num_layers": num_layers,
                     "dropout": dropout,
+                    "use_layernorm": use_layernorm,
+                    "use_residual": use_residual,
                     "optimizer": optimizer_type,
                     "weight_decay": weight_decay,
                     "scheduler": scheduler_type,
@@ -457,6 +598,8 @@ def train_mdn_model(
                 },
                 "best_epoch": best_epoch,
                 "best_val_ce": float(best_val_ce),
+                "best_pdf_linf": float(best_pdf_linf),
+                "best_metric": best_metric,
                 "created_at": datetime.now().isoformat(),
             }
             
@@ -483,11 +626,16 @@ def train_mdn_model(
     # Save training history
     history["best_epoch"] = best_epoch
     history["best_val_ce"] = float(best_val_ce)
+    history["best_pdf_linf"] = float(best_pdf_linf)
+    history["best_metric"] = best_metric
     history_path = output_dir / "history.json"
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
     
-    print(f"\nTraining complete. Best model at epoch {best_epoch+1} with val_loss={best_val_ce:.6f}")
+    if best_metric == "pdf_linf":
+        print(f"\nTraining complete. Best model at epoch {best_epoch+1} with pdf_linf={best_pdf_linf:.6f}")
+    else:
+        print(f"\nTraining complete. Best model at epoch {best_epoch+1} with val_loss={best_val_ce:.6f}")
     print(f"Training history saved to {history_path}")
 
 
@@ -578,7 +726,10 @@ def main():
     train_parser.add_argument("--batch_size", type=int, default=256, help="Batch size")
     train_parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     train_parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
+    train_parser.add_argument("--lambda_ce", type=float, default=1.0, help="Cross-entropy loss coefficient (0.0 to disable)")
     train_parser.add_argument("--lambda_mom", type=float, default=0.0, help="Moment penalty coefficient")
+    train_parser.add_argument("--lambda_pdf", type=float, default=0.0, help="PDF reconstruction loss coefficient")
+    train_parser.add_argument("--pdf_loss_type", type=str, default="l2", choices=["l2", "l1", "linf"], help="PDF loss type")
     train_parser.add_argument("--hidden_size", type=int, default=128, help="Hidden layer size (H)")
     # New optimizer options
     train_parser.add_argument("--optimizer", type=str, default="adam", choices=["adam", "adamw", "sgd"], help="Optimizer type")
@@ -589,6 +740,13 @@ def main():
     # Model architecture options
     train_parser.add_argument("--num_layers", type=int, default=2, help="Number of hidden layers")
     train_parser.add_argument("--dropout", type=float, default=0.0, help="Dropout probability")
+    train_parser.add_argument("--use_layernorm", action="store_true", help="Use Layer Normalization")
+    train_parser.add_argument("--use_residual", action="store_true", help="Use residual connections")
+    # Input feature options
+    train_parser.add_argument("--use_moments_input", action="store_true", help="Add moment features (M1-M4) to input")
+    # Best model selection
+    train_parser.add_argument("--best_metric", type=str, default="val_loss", choices=["val_loss", "pdf_linf"],
+                              help="Metric for selecting best model: 'val_loss' or 'pdf_linf' (default: val_loss)")
     
     # Plot command
     plot_parser = subparsers.add_parser("plot", help="Plot training history")
@@ -604,7 +762,10 @@ def main():
             batch_size=args.batch_size,
             lr=args.lr,
             epochs=args.epochs,
+            lambda_ce=args.lambda_ce,
             lambda_mom=args.lambda_mom,
+            lambda_pdf=args.lambda_pdf,
+            pdf_loss_type=args.pdf_loss_type,
             H=args.hidden_size,
             optimizer_type=args.optimizer,
             weight_decay=args.weight_decay,
@@ -613,6 +774,10 @@ def main():
             warmup_epochs=args.warmup_epochs,
             num_layers=args.num_layers,
             dropout=args.dropout,
+            use_layernorm=args.use_layernorm,
+            use_residual=args.use_residual,
+            use_moments_input=args.use_moments_input,
+            best_metric=args.best_metric,
         )
     elif args.command == "plot":
         plot_training_history(

@@ -78,7 +78,7 @@ class ComputeRequest(BaseModel):
     """Request model for GMM fitting computation."""
     bivariate_params: BivariateNormalParams = Field(default_factory=BivariateNormalParams)
     grid_params: GridParams = Field(default_factory=GridParams)
-    K: int = Field(default=3, gt=0, le=50, description="Number of GMM components")
+    K: int = Field(default=5, gt=0, le=50, description="Number of GMM components (V5 model requires K=5)")
     method: Literal["em", "lp", "hybrid"] = Field(default="em", description="Fitting method")
     em_params: Optional[EMMethodParams] = Field(default=None, description="EM method parameters")
     lp_params: Optional[LPMethodParams] = Field(default=None, description="LP method parameters")

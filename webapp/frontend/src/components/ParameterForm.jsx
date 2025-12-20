@@ -61,13 +61,13 @@ const defaultFormData = {
   sigma_y: 1.6,
   rho: 0.9,
   
-  // Grid parameters
-  z_range_min: -6.0,
-  z_range_max: 8.0,
+  // Grid parameters (V5 model: z ∈ [-15, 15])
+  z_range_min: -15.0,
+  z_range_max: 15.0,
   z_npoints: 2500,
   
-  // GMM parameters
-  K: 3,
+  // GMM parameters (V5 model requires K=5)
+  K: 5,
   method: 'em',
   
   // EM parameters
@@ -80,7 +80,7 @@ const defaultFormData = {
   use_moment_matching: false,
   qp_mode: 'hard',
   soft_lambda: 1e4,
-  mdn_model_path: './ml_init/checkpoints/mdn_init_v1_N64_K5.pt',
+  mdn_model_path: './ml_init/checkpoints_v5',
   mdn_device: 'auto',
   
   // LP parameters
@@ -270,10 +270,10 @@ const ParameterForm = ({ onSubmit, loading }) => {
       mu_y: 0.0,
       sigma_y: 1.6,
       rho: 0.9,
-      z_range_min: -6.0,
-      z_range_max: 8.0,
+      z_range_min: -15.0,
+      z_range_max: 15.0,
       z_npoints: 2500,
-      K: 3,
+      K: 5,
       max_iter: 400,
       tol: 1e-10,
       reg_var: 1e-6,
@@ -334,10 +334,10 @@ const ParameterForm = ({ onSubmit, loading }) => {
         rho: ensureNumber(normalizedData.rho, 0.9),
       },
       grid_params: {
-        z_range: [ensureNumber(normalizedData.z_range_min, -6.0), ensureNumber(normalizedData.z_range_max, 8.0)],
+        z_range: [ensureNumber(normalizedData.z_range_min, -15.0), ensureNumber(normalizedData.z_range_max, 15.0)],
         z_npoints: ensureNumber(normalizedData.z_npoints, 2500),
       },
-      K: ensureNumber(normalizedData.K, 3),
+      K: ensureNumber(normalizedData.K, 5),
       method: normalizedData.method,
       show_grid_points: normalizedData.show_grid_points,
       max_grid_points_display: ensureNumber(normalizedData.max_grid_points_display, 200),
@@ -359,7 +359,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
       // Add MDN parameters if init is 'mdn'
       if (normalizedData.init === 'mdn') {
         request.em_params.mdn_params = {
-          model_path: normalizedData.mdn_model_path || './ml_init/checkpoints/mdn_init_v1_N64_K5.pt',
+          model_path: normalizedData.mdn_model_path || './ml_init/checkpoints_v5',
           device: normalizedData.mdn_device || 'auto',
         }
       }
@@ -520,10 +520,10 @@ const ParameterForm = ({ onSubmit, loading }) => {
       mu_y: 0.0,
       sigma_y: 1.6,
       rho: 0.9,
-      z_range_min: -6.0,
-      z_range_max: 8.0,
+      z_range_min: -15.0,
+      z_range_max: 15.0,
       z_npoints: 2500,
-      K: 3,
+      K: 5,
       max_iter: 400,
       tol: 1e-10,
       reg_var: 1e-6,
@@ -580,7 +580,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
       // Add MDN parameters if init is 'mdn'
       if (normalizedData.init === 'mdn') {
         config.mdn = {
-          model_path: normalizedData.mdn_model_path || './ml_init/checkpoints/mdn_init_v1_N64_K5.pt',
+          model_path: normalizedData.mdn_model_path || './ml_init/checkpoints_v5',
           device: normalizedData.mdn_device || 'auto',
         }
       }
@@ -723,7 +723,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                 type="number"
                 value={editingFields.z_range_min ? formData.z_range_min : (typeof formData.z_range_min === 'number' ? formData.z_range_min : '')}
                 onChange={handleChange('z_range_min')}
-                onBlur={handleBlur('z_range_min', -6.0)}
+                onBlur={handleBlur('z_range_min', -15.0)}
                 margin="normal"
                 inputProps={{ step: 0.1 }}
               />
@@ -735,7 +735,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                 type="number"
                 value={editingFields.z_range_max ? formData.z_range_max : (typeof formData.z_range_max === 'number' ? formData.z_range_max : '')}
                 onChange={handleChange('z_range_max')}
-                onBlur={handleBlur('z_range_max', 8.0)}
+                onBlur={handleBlur('z_range_max', 15.0)}
                 margin="normal"
                 inputProps={{ step: 0.1 }}
               />
@@ -898,7 +898,7 @@ const ParameterForm = ({ onSubmit, loading }) => {
                       label="MDN Model Path"
                       value={formData.mdn_model_path || ''}
                       onChange={handleChange('mdn_model_path')}
-                      helperText="Path to MDN model file (default: ./ml_init/checkpoints/mdn_init_v1_N64_K5.pt)"
+                      helperText="Path to MDN model directory (default: ./ml_init/checkpoints_v5)"
                       margin="normal"
                     />
                   </Grid>

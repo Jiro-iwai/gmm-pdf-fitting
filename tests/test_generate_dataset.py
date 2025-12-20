@@ -58,13 +58,25 @@ def test_generate_dataset_basic():
             assert np.isclose(integral, 1.0, rtol=1e-3), f"Sample {i} not normalized"
         
         # Check params are in valid ranges
-        # Note: SIGMA_RANGE is (0.15, 2.5) as of V2 dataset improvements
+        from src.ml_init.dataset import (
+            COORDINATE_MODE, MU_RANGE, DELTA_MU_RANGE, MU_X_FIXED,
+            SIGMA_RANGE, RHO_RANGE
+        )
+        
         mu_x, sigma_x, mu_y, sigma_y, rho = params.T
-        assert np.all(mu_x >= -3.0) and np.all(mu_x <= 3.0)
-        assert np.all(sigma_x >= 0.15) and np.all(sigma_x <= 2.5)
-        assert np.all(mu_y >= -3.0) and np.all(mu_y <= 3.0)
-        assert np.all(sigma_y >= 0.15) and np.all(sigma_y <= 2.5)
-        assert np.all(rho >= -0.99) and np.all(rho <= 0.99)
+        
+        if COORDINATE_MODE == "relative":
+            # In relative mode: mu_x = 0, mu_y = delta_mu
+            assert np.allclose(mu_x, MU_X_FIXED), f"mu_x should be {MU_X_FIXED} in relative mode"
+            assert np.all(mu_y >= DELTA_MU_RANGE[0]) and np.all(mu_y <= DELTA_MU_RANGE[1])
+        else:
+            # In absolute mode: mu_x and mu_y are both in MU_RANGE
+            assert np.all(mu_x >= MU_RANGE[0]) and np.all(mu_x <= MU_RANGE[1])
+            assert np.all(mu_y >= MU_RANGE[0]) and np.all(mu_y <= MU_RANGE[1])
+        
+        assert np.all(sigma_x >= SIGMA_RANGE[0]) and np.all(sigma_x <= SIGMA_RANGE[1])
+        assert np.all(sigma_y >= SIGMA_RANGE[0]) and np.all(sigma_y <= SIGMA_RANGE[1])
+        assert np.all(rho >= RHO_RANGE[0]) and np.all(rho <= RHO_RANGE[1])
 
 
 def test_generate_dataset_reproducibility():

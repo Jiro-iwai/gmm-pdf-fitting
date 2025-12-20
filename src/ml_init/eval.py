@@ -37,8 +37,19 @@ def load_model_and_metadata(
     """
     model_path = Path(model_path)
     
-    # Load metadata (same directory, same name but .json)
-    metadata_path = model_path.parent / "metadata.json"
+    # Handle both directory and file paths
+    if model_path.is_dir():
+        # Directory passed: look for .pt file and metadata.json inside
+        pt_files = list(model_path.glob("*.pt"))
+        if not pt_files:
+            raise FileNotFoundError(f"No .pt files found in directory: {model_path}")
+        model_pt_path = pt_files[0]  # Use first .pt file
+        metadata_path = model_path / "metadata.json"
+    else:
+        # File passed: metadata is in same directory
+        model_pt_path = model_path
+        metadata_path = model_path.parent / "metadata.json"
+    
     if not metadata_path.exists():
         raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
     
@@ -57,16 +68,22 @@ def load_model_and_metadata(
     H = train_args.get("H", 128)
     num_layers = train_args.get("num_layers", 2)
     dropout = train_args.get("dropout", 0.0)
+    use_layernorm = train_args.get("use_layernorm", False)
+    use_residual = train_args.get("use_residual", False)
     
     # Create grid
     z = np.linspace(z_min, z_max, N)
     
     # Create model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = MDNModel(N=N, K=K, H=H, sigma_min=sigma_min, num_layers=num_layers, dropout=dropout).to(device)
+    model = MDNModel(
+        N=N, K=K, H=H, sigma_min=sigma_min, 
+        num_layers=num_layers, dropout=dropout,
+        use_layernorm=use_layernorm, use_residual=use_residual
+    ).to(device)
     
     # Load state dict with backward compatibility
-    state_dict = torch.load(model_path, map_location=device)
+    state_dict = torch.load(model_pt_path, map_location=device, weights_only=True)
     
     # Check if old format (fc1, fc2, fc3) and convert to new format
     if "fc1.weight" in state_dict and "hidden.0.weight" not in state_dict:
