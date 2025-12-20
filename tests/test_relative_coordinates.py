@@ -133,8 +133,9 @@ class TestDatasetRelativeCoordinates:
             # M1 should be relatively small (centered around 0)
             # Note: M1 won't be exactly 0 because E[max(X,Y)] != 0 even when μ_x=μ_y=0
             # But it should be much smaller than when μ_x, μ_y vary over [-3, 3]
-            assert np.abs(np.mean(m1_values)) < 2.0, \
-                f"Mean M1 = {np.mean(m1_values):.2f}, expected < 2.0"
+            # V5 has wider parameter ranges (Δμ ∈ [-10, 10]), so M1 can be larger
+            assert np.abs(np.mean(m1_values)) < 5.0, \
+                f"Mean M1 = {np.mean(m1_values):.2f}, expected < 5.0"
 
 
 # =============================================================================
@@ -308,9 +309,14 @@ class TestEndToEndRelativeCoordinates:
                 epochs=5,  # More epochs for better training
             )
             
-            model_path = output_dir / "mdn_init_v1_N64_K5.pt"
-            z = np.linspace(-8, 8, 64)
+            # Get N from the dataset (V5 uses N=96)
+            train_data = np.load(data_dir / "train.npz")
+            N = len(train_data["z"])
             K = 5
+            
+            # Model file name is based on N from data
+            model_path = output_dir / f"mdn_init_v1_N{N}_K{K}.pt"
+            z = np.linspace(-15, 15, N)  # Use V5 grid range
             
             # Two PDFs with same relative parameters but different absolute positions
             # Same: Δμ = 1.0, σ_x = 1.0, σ_y = 0.8, ρ = 0.5
@@ -320,9 +326,9 @@ class TestEndToEndRelativeCoordinates:
             f2 = max_pdf_bivariate_normal(z, 1.5, 1.0, 2.5, 0.8, 0.5)
             f2 = normalize_pdf_on_grid(z, f2)
             
-            # Get predictions
-            result1 = mdn_predict_init(z, f1, K, str(model_path), device="cpu")
-            result2 = mdn_predict_init(z, f2, K, str(model_path), device="cpu")
+            # Get predictions (mdn_predict_init expects directory path, not file path)
+            result1 = mdn_predict_init(z, f1, K, str(output_dir), device="cpu")
+            result2 = mdn_predict_init(z, f2, K, str(output_dir), device="cpu")
             
             # Convert to relative coordinates for comparison
             m1_1 = _compute_m1(z, f1)

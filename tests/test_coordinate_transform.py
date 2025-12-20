@@ -15,14 +15,14 @@ from src.gmm_fitting import max_pdf_bivariate_normal, normalize_pdf_on_grid
 
 def compute_m1(z: np.ndarray, f: np.ndarray) -> float:
     """Compute first moment (mean) of PDF using trapezoidal rule."""
-    return np.trapz(z * f, z)
+    return np.trapezoid(z * f, z)
 
 
 def interpolate_to_grid(z_orig: np.ndarray, f_orig: np.ndarray, z_target: np.ndarray) -> np.ndarray:
     """Interpolate PDF to target grid."""
     f_interp = np.interp(z_target, z_orig, f_orig, left=0.0, right=0.0)
     # Re-normalize
-    integral = np.trapz(f_interp, z_target)
+    integral = np.trapezoid(f_interp, z_target)
     if integral > 0:
         f_interp = f_interp / integral
     return f_interp
@@ -79,7 +79,7 @@ def test_coordinate_transform_equivalence():
         
         # Compare original and round-trip PDF
         max_diff = np.max(np.abs(f_orig - f_back))
-        l2_diff = np.sqrt(np.trapz((f_orig - f_back)**2, z))
+        l2_diff = np.sqrt(np.trapezoid((f_orig - f_back)**2, z))
         
         print(f"  Round-trip error: max|Δf| = {max_diff:.2e}, L2 = {l2_diff:.2e}")
         
