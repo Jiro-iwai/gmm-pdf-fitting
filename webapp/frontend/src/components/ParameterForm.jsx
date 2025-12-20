@@ -631,7 +631,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
     setEditingFields({})
   }
 
-  // Expose handlers via ref
+  // Expose handlers via ref - include dependencies to ensure handlers are updated
   useImperativeHandle(ref, () => ({
     handleSubmit: (e) => {
       if (e) {
@@ -642,7 +642,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
     handleLoadConfig,
     handleExportConfig,
     handleReset,
-  }))
+  }), [handleSubmit, handleLoadConfig, handleExportConfig, handleReset])
 
   return (
     <Box component="form" onSubmit={handleSubmit}>
