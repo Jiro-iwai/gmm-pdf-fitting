@@ -39,7 +39,16 @@ const formatExponential = (value) => {
   if (isNaN(num)) return ''
   // Use exponential notation for very small or very large numbers
   if (Math.abs(num) < 0.01 || Math.abs(num) >= 10000) {
-    return num.toExponential()
+    // Convert to exponential notation and remove unnecessary + sign and trailing zeros
+    const expStr = num.toExponential()
+    // Remove + sign after e (e.g., "1e+4" -> "1e4")
+    // Also remove trailing zeros after decimal point (e.g., "1.000000e4" -> "1e4")
+    return expStr.replace(/e\+/, 'e').replace(/(\.\d*?)0+e/, (match, p1) => {
+      // If all digits after decimal are zeros, remove decimal point
+      if (p1 === '.') return 'e'
+      // Otherwise, remove trailing zeros
+      return p1.replace(/0+$/, '') + 'e'
+    })
   }
   return String(num)
 }
