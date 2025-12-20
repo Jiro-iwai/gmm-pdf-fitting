@@ -380,6 +380,83 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
       <Typography variant="h6" gutterBottom>
         {title}
       </Typography>
+
+      {/* Action Buttons */}
+      {actionHandlers && (
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            disabled={loading}
+            onClick={(e) => actionHandlers.handleSubmit(e)}
+            sx={{ flex: 1, minWidth: '200px' }}
+          >
+            {loading ? 'Computing...' : 'Compute'}
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="large"
+            component="label"
+            disabled={loading}
+          >
+            Load Config
+            <input
+              type="file"
+              accept=".json"
+              hidden
+              onChange={actionHandlers.handleLoadConfig}
+            />
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="large"
+            onClick={actionHandlers.handleExportConfig}
+            disabled={loading}
+          >
+            Export Config
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            size="large"
+            onClick={actionHandlers.handleReset}
+            disabled={loading}
+          >
+            Reset
+          </Button>
+        </Box>
+      )}
+
+      <Divider sx={{ my: 2 }} />
+
+      <Box sx={{ minHeight: 500, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {hasValidArrays && plotData && plotData.length > 0 ? (
+          <Plot
+            key={`plot-${revision}`}
+            data={plotData}
+            layout={plotLayout}
+            config={{ 
+              responsive: true, 
+              displayModeBar: true,
+              displaylogo: false,
+              modeBarButtonsToRemove: ['select2d', 'lasso2d']
+            }}
+            style={{ width: '100%', minHeight: 500 }}
+            useResizeHandler={true}
+          />
+        ) : result && !hasValidArrays ? (
+          <Typography color="error">Failed to prepare plot data</Typography>
+        ) : (
+          <Typography variant="body1" color="text.secondary" align="center">
+            Configure parameters and click "Compute" to see results
+          </Typography>
+        )}
+      </Box>
+
+      <Divider sx={{ my: 2 }} />
       
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -620,84 +697,6 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
           </Grid>
         </AccordionDetails>
       </Accordion>
-
-      {/* Action Buttons */}
-      {actionHandlers && (
-        <>
-          <Divider sx={{ my: 2 }} />
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              size="large"
-              disabled={loading}
-              onClick={(e) => actionHandlers.handleSubmit(e)}
-              sx={{ flex: 1, minWidth: '200px' }}
-            >
-              {loading ? 'Computing...' : 'Compute'}
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              size="large"
-              component="label"
-              disabled={loading}
-            >
-              Load Config
-              <input
-                type="file"
-                accept=".json"
-                hidden
-                onChange={actionHandlers.handleLoadConfig}
-              />
-            </Button>
-            <Button
-              variant="outlined"
-              color="secondary"
-              size="large"
-              onClick={actionHandlers.handleExportConfig}
-              disabled={loading}
-            >
-              Export Config
-            </Button>
-            <Button
-              variant="outlined"
-              color="warning"
-              size="large"
-              onClick={actionHandlers.handleReset}
-              disabled={loading}
-            >
-              Reset
-            </Button>
-          </Box>
-        </>
-      )}
-
-      <Divider sx={{ my: 2 }} />
-
-      <Box sx={{ minHeight: 500, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {hasValidArrays && plotData && plotData.length > 0 ? (
-          <Plot
-            key={`plot-${revision}`}
-            data={plotData}
-            layout={plotLayout}
-            config={{ 
-              responsive: true, 
-              displayModeBar: true,
-              displaylogo: false,
-              modeBarButtonsToRemove: ['select2d', 'lasso2d']
-            }}
-            style={{ width: '100%', minHeight: 500 }}
-            useResizeHandler={true}
-          />
-        ) : result && !hasValidArrays ? (
-          <Typography color="error">Failed to prepare plot data</Typography>
-        ) : (
-          <Typography variant="body1" color="text.secondary" align="center">
-            Configure parameters and click "Compute" to see results
-          </Typography>
-        )}
-      </Box>
     </Box>
   )
 }
