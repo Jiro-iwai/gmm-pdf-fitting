@@ -389,7 +389,13 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
             color="primary"
             size="large"
             disabled={loading}
-            onClick={(e) => actionHandlers.handleSubmit(e)}
+            onClick={() => {
+              // Find and submit the ParameterForm form element
+              const form = document.querySelector('form')
+              if (form) {
+                form.requestSubmit()
+              }
+            }}
             sx={{ flex: 1, minWidth: '200px' }}
           >
             {loading ? 'Computing...' : 'Compute'}
@@ -406,14 +412,14 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
               type="file"
               accept=".json"
               hidden
-              onChange={actionHandlers.handleLoadConfig}
+              onChange={(e) => actionHandlers.handleLoadConfig(e)}
             />
           </Button>
           <Button
             variant="outlined"
             color="secondary"
             size="large"
-            onClick={actionHandlers.handleExportConfig}
+            onClick={() => actionHandlers.handleExportConfig()}
             disabled={loading}
           >
             Export Config
@@ -422,7 +428,7 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
             variant="outlined"
             color="warning"
             size="large"
-            onClick={actionHandlers.handleReset}
+            onClick={() => actionHandlers.handleReset()}
             disabled={loading}
           >
             Reset
