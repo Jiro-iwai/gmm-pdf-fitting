@@ -17,7 +17,7 @@ import {
 import PlotViewer from './PlotViewer'
 import StatisticsTable from './StatisticsTable'
 
-const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
+const ResultDisplay = ({ result, plotSettings, setPlotSettings, actionHandlers, loading }) => {
   // Safety checks for nested objects
   const errorMetrics = result?.error_metrics || {}
   const executionTime = result?.execution_time || {}
@@ -33,7 +33,13 @@ const ResultDisplay = ({ result, plotSettings, setPlotSettings }) => {
       {/* Plot - Only show if result exists */}
       {result && (
         <Paper sx={{ p: 2, flexShrink: 0 }}>
-          <PlotViewer result={result} plotSettings={plotSettings} setPlotSettings={setPlotSettings} />
+          <PlotViewer 
+            result={result} 
+            plotSettings={plotSettings} 
+            setPlotSettings={setPlotSettings}
+            actionHandlers={actionHandlers}
+            loading={loading}
+          />
         </Paper>
       )}
 

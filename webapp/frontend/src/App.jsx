@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Container, Box, Typography, Paper, IconButton, Tooltip } from '@mui/material'
 import Brightness4Icon from '@mui/icons-material/Brightness4'
 import Brightness7Icon from '@mui/icons-material/Brightness7'
@@ -47,6 +47,8 @@ function App({ toggleColorMode, mode }) {
   const [error, setError] = useState(null)
   // Plot settings state - persist across result changes and browser sessions
   const [plotSettings, setPlotSettings] = useState(loadSavedPlotSettings)
+  // Ref for ParameterForm to access action handlers
+  const parameterFormRef = useRef(null)
   
   // Save plot settings to localStorage whenever they change
   useEffect(() => {
@@ -145,7 +147,7 @@ function App({ toggleColorMode, mode }) {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <ParameterForm onSubmit={handleCompute} loading={loading} />
+          <ParameterForm ref={parameterFormRef} onSubmit={handleCompute} loading={loading} />
         </Paper>
 
         <Box sx={{ 
@@ -164,6 +166,8 @@ function App({ toggleColorMode, mode }) {
             result={result} 
             plotSettings={plotSettings}
             setPlotSettings={setPlotSettings}
+            actionHandlers={parameterFormRef.current}
+            loading={loading}
           />
 
           {!result && !error && !loading && (

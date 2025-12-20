@@ -68,7 +68,7 @@ const LineStylePreview = ({ style, width = 60, height = 20 }) => {
   )
 }
 
-const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSettings: setExternalPlotSettings }) => {
+const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSettings: setExternalPlotSettings, actionHandlers, loading }) => {
   const theme = useTheme()
   
   // Use external state if provided, otherwise use local state
@@ -630,6 +630,58 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
           </Grid>
         </AccordionDetails>
       </Accordion>
+
+      {/* Action Buttons */}
+      {actionHandlers && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              disabled={loading}
+              onClick={(e) => actionHandlers.handleSubmit(e)}
+              sx={{ flex: 1, minWidth: '200px' }}
+            >
+              {loading ? 'Computing...' : 'Compute'}
+            </Button>
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="large"
+              component="label"
+              disabled={loading}
+            >
+              Load Config
+              <input
+                type="file"
+                accept=".json"
+                hidden
+                onChange={actionHandlers.handleLoadConfig}
+              />
+            </Button>
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="large"
+              onClick={actionHandlers.handleExportConfig}
+              disabled={loading}
+            >
+              Export Config
+            </Button>
+            <Button
+              variant="outlined"
+              color="warning"
+              size="large"
+              onClick={actionHandlers.handleReset}
+              disabled={loading}
+            >
+              Reset
+            </Button>
+          </Box>
+        </>
+      )}
 
       <Divider sx={{ my: 2 }} />
 

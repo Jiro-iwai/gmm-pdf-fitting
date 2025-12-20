@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react'
 import {
   Box,
   Button,
@@ -131,7 +131,7 @@ const loadSavedParams = () => {
   return defaultFormData
 }
 
-const ParameterForm = ({ onSubmit, loading }) => {
+const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
   // Track which fields are being edited (to allow temporary string values)
   const [editingFields, setEditingFields] = useState({})
   
@@ -626,6 +626,24 @@ const ParameterForm = ({ onSubmit, loading }) => {
     URL.revokeObjectURL(url)
   }
 
+  const handleReset = () => {
+    setFormData(defaultFormData)
+    setEditingFields({})
+  }
+
+  // Expose handlers via ref
+  useImperativeHandle(ref, () => ({
+    handleSubmit: (e) => {
+      if (e) {
+        e.preventDefault()
+      }
+      handleSubmit(e)
+    },
+    handleLoadConfig,
+    handleExportConfig,
+    handleReset,
+  }))
+
   return (
     <Box component="form" onSubmit={handleSubmit}>
       <Typography variant="h5" gutterBottom>
@@ -1101,60 +1119,13 @@ const ParameterForm = ({ onSubmit, loading }) => {
         </Accordion>
       )}
 
-      <Divider sx={{ my: 2 }} />
-
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          fullWidth
-          size="large"
-          disabled={loading}
-          sx={{ flex: 1, minWidth: '200px' }}
-        >
-          {loading ? 'Computing...' : 'Compute'}
-        </Button>
-        <Button
-          variant="outlined"
-          color="secondary"
-          size="large"
-          component="label"
-          disabled={loading}
-        >
-          Load Config
-          <input
-            type="file"
-            accept=".json"
-            hidden
-            onChange={handleLoadConfig}
-          />
-        </Button>
-        <Button
-          variant="outlined"
-          color="secondary"
-          size="large"
-          onClick={handleExportConfig}
-          disabled={loading}
-        >
-          Export Config
-        </Button>
-        <Button
-          variant="outlined"
-          color="warning"
-          size="large"
-          onClick={() => {
-            setFormData(defaultFormData)
-            setEditingFields({})
-          }}
-          disabled={loading}
-        >
-          Reset
-        </Button>
-      </Box>
     </Box>
   )
 }
+
+})
+
+ParameterForm.displayName = 'ParameterForm'
 
 export default ParameterForm
 
