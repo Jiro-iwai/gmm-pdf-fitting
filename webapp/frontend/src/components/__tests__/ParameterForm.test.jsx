@@ -24,12 +24,7 @@ describe('ParameterForm', () => {
   test('renders all main input fields', async () => {
     renderWithTheme(<ParameterForm onSubmit={mockOnSubmit} loading={false} />)
     
-    // Check Compute button (always visible)
-    const computeButtons = screen.getAllByRole('button')
-    const computeButton = computeButtons.find(btn => 
-      btn.textContent.toLowerCase().includes('compute')
-    )
-    expect(computeButton).toBeInTheDocument()
+    // Note: Compute button has been moved to PlotViewer, so we don't check for it here
     
     // Open the Bivariate Normal Distribution accordion
     const bivariateAccordion = screen.getByRole('button', { name: /bivariate normal distribution/i })
@@ -90,7 +85,7 @@ describe('ParameterForm', () => {
     })
   })
 
-  test('calls onSubmit with correct parameters when Compute is clicked', async () => {
+  test('calls onSubmit with correct parameters when form is submitted', async () => {
     renderWithTheme(<ParameterForm onSubmit={mockOnSubmit} loading={false} />)
     
     // Open the Bivariate Normal Distribution accordion
@@ -102,8 +97,9 @@ describe('ParameterForm', () => {
       const muXInput = screen.getByLabelText(/μ_X|mu_x/i)
       fireEvent.change(muXInput, { target: { value: '0.5' } })
       
-      const computeButton = screen.getByRole('button', { name: /compute/i })
-      fireEvent.click(computeButton)
+      // Submit the form directly (Compute button is now in PlotViewer)
+      const form = document.querySelector('form')
+      fireEvent.submit(form)
       
       await waitFor(() => {
         expect(mockOnSubmit).toHaveBeenCalledTimes(1)
@@ -114,14 +110,7 @@ describe('ParameterForm', () => {
     })
   })
 
-  test('disables Compute button when loading', () => {
-    renderWithTheme(<ParameterForm onSubmit={mockOnSubmit} loading={true} />)
-    
-    // Find Compute button by text content
-    const computeButton = screen.getByRole('button', { name: /computing|compute/i })
-    expect(computeButton).toBeInTheDocument()
-    expect(computeButton).toBeDisabled()
-  })
+  // Note: Compute button has been moved to PlotViewer, so loading state test is no longer applicable here
 
   test('shows method-specific parameters when method changes', async () => {
     renderWithTheme(<ParameterForm onSubmit={mockOnSubmit} loading={false} />)

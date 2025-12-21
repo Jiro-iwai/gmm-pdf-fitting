@@ -68,7 +68,7 @@ const LineStylePreview = ({ style, width = 60, height = 20 }) => {
   )
 }
 
-const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSettings: setExternalPlotSettings }) => {
+const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSettings: setExternalPlotSettings, actionHandlers, loading }) => {
   const theme = useTheme()
   
   // Use external state if provided, otherwise use local state
@@ -120,29 +120,19 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
     scaleMode
   ])
 
-  if (!result || !result.z || !result.f_true || !result.f_hat) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Typography color="text.secondary">Plot data not available</Typography>
-      </Box>
-    )
-  }
+  // Check if we have valid plot data
+  const hasValidData = result && result.z && result.f_true && result.f_hat
 
-  const { z, f_true, f_hat } = result
+  // Extract data only if valid
+  const z = hasValidData ? result.z : []
+  const f_true = hasValidData ? result.f_true : []
+  const f_hat = hasValidData ? result.f_hat : []
   const zArray = Array.isArray(z) ? z : []
   const fTrueArray = Array.isArray(f_true) ? f_true : []
   const fHatArray = Array.isArray(f_hat) ? f_hat : []
 
-  // Validate data arrays
-  if (zArray.length === 0 || fTrueArray.length === 0 || fHatArray.length === 0) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Typography color="error">
-          Invalid data: z={zArray.length}, f_true={fTrueArray.length}, f_hat={fHatArray.length}
-        </Typography>
-      </Box>
-    )
-  }
+  // Check for valid array lengths
+  const hasValidArrays = zArray.length > 0 && fTrueArray.length > 0 && fHatArray.length > 0
 
   // Prepare grid points for display (memoized to recalculate when settings change)
   const { zDisplay, fTrueDisplay } = useMemo(() => {
@@ -390,6 +380,89 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
       <Typography variant="h6" gutterBottom>
         {title}
       </Typography>
+
+      {/* Action Buttons */}
+      {actionHandlers && (
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            disabled={loading}
+            onClick={() => {
+              // Find and submit the ParameterForm form element
+              const form = document.querySelector('form')
+              if (form) {
+                form.requestSubmit()
+              }
+            }}
+            sx={{ flex: 1, minWidth: '200px' }}
+          >
+            {loading ? 'Computing...' : 'Compute'}
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="large"
+            component="label"
+            disabled={loading}
+          >
+            Load Config
+            <input
+              type="file"
+              accept=".json"
+              hidden
+              onChange={(e) => actionHandlers.handleLoadConfig(e)}
+            />
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="large"
+            onClick={() => actionHandlers.handleExportConfig()}
+            disabled={loading}
+          >
+            Export Config
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            size="large"
+            onClick={() => actionHandlers.handleReset()}
+            disabled={loading}
+          >
+            Reset
+          </Button>
+        </Box>
+      )}
+
+      <Divider sx={{ my: 2 }} />
+
+      <Box sx={{ minHeight: 500, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {hasValidArrays && plotData && plotData.length > 0 ? (
+          <Plot
+            key={`plot-${revision}`}
+            data={plotData}
+            layout={plotLayout}
+            config={{ 
+              responsive: true, 
+              displayModeBar: true,
+              displaylogo: false,
+              modeBarButtonsToRemove: ['select2d', 'lasso2d']
+            }}
+            style={{ width: '100%', minHeight: 500 }}
+            useResizeHandler={true}
+          />
+        ) : result && !hasValidArrays ? (
+          <Typography color="error">Failed to prepare plot data</Typography>
+        ) : (
+          <Typography variant="body1" color="text.secondary" align="center">
+            Configure parameters and click "Compute" to see results
+          </Typography>
+        )}
+      </Box>
+
+      <Divider sx={{ my: 2 }} />
       
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -630,28 +703,6 @@ const PlotViewer = ({ result, plotSettings: externalPlotSettings, setPlotSetting
           </Grid>
         </AccordionDetails>
       </Accordion>
-
-      <Divider sx={{ my: 2 }} />
-
-      <Box sx={{ minHeight: 500, width: '100%' }}>
-        {plotData && plotData.length > 0 ? (
-          <Plot
-            key={`plot-${revision}`}
-            data={plotData}
-            layout={plotLayout}
-            config={{ 
-              responsive: true, 
-              displayModeBar: true,
-              displaylogo: false,
-              modeBarButtonsToRemove: ['select2d', 'lasso2d']
-            }}
-            style={{ width: '100%', minHeight: 500 }}
-            useResizeHandler={true}
-          />
-        ) : (
-          <Typography color="error">Failed to prepare plot data</Typography>
-        )}
-      </Box>
     </Box>
   )
 }

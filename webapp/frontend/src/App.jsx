@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Container, Box, Typography, Paper, IconButton, Tooltip } from '@mui/material'
 import Brightness4Icon from '@mui/icons-material/Brightness4'
 import Brightness7Icon from '@mui/icons-material/Brightness7'
@@ -47,6 +47,10 @@ function App({ toggleColorMode, mode }) {
   const [error, setError] = useState(null)
   // Plot settings state - persist across result changes and browser sessions
   const [plotSettings, setPlotSettings] = useState(loadSavedPlotSettings)
+  // Ref for ParameterForm to access action handlers
+  const parameterFormRef = useRef(null)
+  // State to track when ParameterForm ref is ready (to trigger re-render)
+  const [formReady, setFormReady] = useState(false)
   
   // Save plot settings to localStorage whenever they change
   useEffect(() => {
@@ -56,6 +60,13 @@ function App({ toggleColorMode, mode }) {
       console.warn('Failed to save plot settings:', e)
     }
   }, [plotSettings])
+
+  // Trigger re-render when ParameterForm ref is ready
+  useEffect(() => {
+    if (parameterFormRef.current && !formReady) {
+      setFormReady(true)
+    }
+  })
 
   const handleCompute = async (params) => {
     setLoading(true)
@@ -145,7 +156,7 @@ function App({ toggleColorMode, mode }) {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <ParameterForm onSubmit={handleCompute} loading={loading} />
+          <ParameterForm ref={parameterFormRef} onSubmit={handleCompute} loading={loading} />
         </Paper>
 
         <Box sx={{ 
@@ -164,15 +175,9 @@ function App({ toggleColorMode, mode }) {
             result={result} 
             plotSettings={plotSettings}
             setPlotSettings={setPlotSettings}
+            actionHandlers={formReady ? parameterFormRef.current : null}
+            loading={loading}
           />
-
-          {!result && !error && !loading && (
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="body1" color="text.secondary" align="center">
-                Configure parameters and click "Compute" to see results
-              </Typography>
-            </Paper>
-          )}
         </Box>
       </Box>
     </Container>
