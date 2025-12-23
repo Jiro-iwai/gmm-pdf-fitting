@@ -9,7 +9,8 @@ import base64
 import io
 import json
 import numpy as np
-from typing import Dict, Any
+import torch
+from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -42,6 +43,150 @@ from webapp.models import (
     ErrorMetrics,
     ExecutionTime,
 )
+
+# LAMF model cache (singleton pattern)
+_lamf_model_cache: Dict[str, Any] = {
+    "model": None,
+    "metadata": None,
+    "z_grid": None,
+}
+
+
+def get_lamf_model():
+    """Get cached LAMF model, loading if necessary."""
+    global _lamf_model_cache
+    
+    if _lamf_model_cache["model"] is None:
+        from lamf.model import LAMFFitter
+        
+        # Default LAMF model path
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        model_dir = os.path.join(base_dir, "lamf", "checkpoints_v4")
+        model_path = os.path.join(model_dir, "best_model.pt")
+        metadata_path = os.path.join(model_dir, "metadata.json")
+        
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"LAMF model not found at {model_path}")
+        
+        # Load metadata if exists
+        metadata = {
+            "N": 96,
+            "K": 5,
+            "T": 6,
+            "z_min": -15.0,
+            "z_max": 15.0,
+        }
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as f:
+                metadata.update(json.load(f))
+        
+        # Create model
+        model = LAMFFitter(
+            N=metadata["N"],
+            K=metadata["K"],
+            T=metadata.get("T", 6),
+            init_hidden_dim=metadata.get("init_hidden_dim", 256),
+            init_num_layers=metadata.get("init_num_layers", 3),
+            refine_hidden_dim=metadata.get("refine_hidden_dim", 128),
+            refine_num_layers=metadata.get("refine_num_layers", 2),
+            sigma_min=metadata.get("sigma_min", 1e-3),
+        )
+        
+        # Load weights
+        checkpoint = torch.load(model_path, weights_only=False, map_location="cpu")
+        model.load_state_dict(checkpoint["model_state_dict"])
+        model.eval()
+        
+        # Create z grid for the model
+        z_grid = np.linspace(metadata["z_min"], metadata["z_max"], metadata["N"])
+        
+        _lamf_model_cache["model"] = model
+        _lamf_model_cache["metadata"] = metadata
+        _lamf_model_cache["z_grid"] = z_grid
+        
+        print(f"LAMF model loaded from {model_path}")
+    
+    return _lamf_model_cache["model"], _lamf_model_cache["metadata"], _lamf_model_cache["z_grid"]
+
+
+def fit_gmm_lamf(z: np.ndarray, f_true: np.ndarray, K: int = 5) -> tuple:
+    """
+    Fit GMM using LAMF model.
+    
+    The LAMF model is trained on relative coordinates (mean=0), so:
+    1. Input PDF is shifted to have mean=0 before inference
+    2. Output means are shifted back to original coordinates
+    
+    Parameters:
+    -----------
+    z : np.ndarray
+        Grid points
+    f_true : np.ndarray
+        True PDF values
+    K : int
+        Number of GMM components (must match model K)
+    
+    Returns:
+    --------
+    gmm_params : GMM1DParams
+        Fitted GMM parameters
+    inference_time : float
+        Inference time in seconds
+    """
+    model, metadata, model_z = get_lamf_model()
+    
+    if K != metadata["K"]:
+        raise ValueError(f"LAMF model requires K={metadata['K']}, got K={K}")
+    
+    # Compute global mean of input PDF for coordinate transformation
+    dz_input = z[1] - z[0] if len(z) > 1 else 1.0
+    w_input = f_true * dz_input
+    w_input = w_input / w_input.sum()  # Normalize
+    global_mean = np.sum(w_input * z)
+    
+    # Shift input grid to have mean=0 (relative coordinates)
+    z_shifted = z - global_mean
+    
+    # Interpolate shifted PDF to model grid
+    # Model grid is [-15, 15], input may be different
+    f_interp = np.interp(model_z, z_shifted, f_true, left=0.0, right=0.0)
+    
+    # Normalize to mass values (w)
+    dz = model_z[1] - model_z[0]
+    w = f_interp * dz
+    w_sum = w.sum()
+    if w_sum > 1e-12:
+        w = w / w_sum
+    else:
+        # Fallback: uniform distribution if PDF is too small
+        w = np.ones_like(w) / len(w)
+    
+    # Convert to tensors
+    z_tensor = torch.from_numpy(model_z.astype(np.float32))
+    w_tensor = torch.from_numpy(w.astype(np.float32)).unsqueeze(0)  # (1, N)
+    
+    # Inference
+    start_time = time.time()
+    with torch.no_grad():
+        result = model(z_tensor, w_tensor)
+    inference_time = time.time() - start_time
+    
+    # Extract parameters
+    pi = result["pi"][0].numpy()
+    mu = result["mu"][0].numpy()
+    sigma = result["sigma"][0].numpy()
+    
+    # Shift means back to original coordinates
+    mu = mu + global_mean
+    
+    # Create GMM1DParams
+    gmm_params = GMM1DParams(
+        pi=pi,
+        mu=mu,
+        var=sigma**2,
+    )
+    
+    return gmm_params, inference_time
 
 app = FastAPI(
     title="GMM Fitting API",
@@ -116,6 +261,11 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         mdn_model_path = mdn_params.get("model_path") if mdn_params else None
         mdn_device = mdn_params.get("device", "auto") if mdn_params else "auto"
         
+        # LAMF parameters
+        lamf_params = config_dict.get("lamf_params", {})
+        lamf_model_path = lamf_params.get("model_path") if lamf_params else None
+        lamf_device = lamf_params.get("device", "auto") if lamf_params else "auto"
+        
         params, ll, n_iter = fit_gmm1d_to_pdf_weighted_em(
             z, f_true,
             K=K,
@@ -130,7 +280,8 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             qp_mode=qp_mode,
             soft_lambda=soft_lambda,
             mdn_model_path=mdn_model_path,
-            mdn_device=mdn_device,
+            mdn_device=mdn_device if init == "mdn" else lamf_device,
+            lamf_model_path=lamf_model_path,
         )
         total_em_time = time.time() - em_start_time
         
@@ -177,6 +328,7 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
         
         em_elapsed_time = 0.0
         qp_elapsed_time = 0.0
+        init_elapsed_time = 0.0  # LP doesn't have init time
         qp_info = None
         
         weights = lp_result["weights"]
@@ -347,6 +499,29 @@ def compute_gmm_fitting(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             "dict_J": int(dict_J),
             "dict_L": int(dict_L),
         }
+    elif method == "lamf":
+        # LAMF method - direct neural network inference
+        lamf_start_time = time.time()
+        
+        try:
+            params, lamf_inference_time = fit_gmm_lamf(z, f_true, K=K)
+        except FileNotFoundError as e:
+            raise ValueError(f"LAMF model not found: {e}")
+        except ValueError as e:
+            raise ValueError(f"LAMF error: {e}")
+        
+        lamf_elapsed_time = time.time() - lamf_start_time
+        em_elapsed_time = lamf_elapsed_time  # Use em_time field for LAMF time
+        lp_elapsed_time = 0.0
+        qp_elapsed_time = 0.0
+        init_elapsed_time = 0.0  # LAMF doesn't have separate init time
+        
+        n_iter = 6  # LAMF uses T=6 refinement steps
+        ll_value = None  # LAMF doesn't compute log-likelihood
+        diagnostics = {
+            "lamf_inference_time_ms": float(lamf_inference_time * 1000),
+            "T": 6,
+        }
     else:
         raise ValueError(f"Unknown method: {method}")
     
@@ -475,8 +650,10 @@ def generate_plot_base64(z: np.ndarray, f_true: np.ndarray, f_hat: np.ndarray,
     ax2.grid(True, alpha=0.3, which='both')
     ax2.set_xlim(z.min(), z.max())
     
+    # Handle None log-likelihood (e.g., for LAMF method)
+    ll_str = f"{ll_value:.6f}" if ll_value is not None else "N/A"
     fig.suptitle(
-        f'PDF Comparison: μ_X={mu_x:.2f}, σ_X={sigma_x:.2f}, μ_Y={mu_y:.2f}, σ_Y={sigma_y:.2f}, ρ={rho:.2f} | Log-likelihood: {ll_value:.6f}',
+        f'PDF Comparison: μ_X={mu_x:.2f}, σ_X={sigma_x:.2f}, μ_Y={mu_y:.2f}, σ_Y={sigma_y:.2f}, ρ={rho:.2f} | Log-likelihood: {ll_str}',
         fontsize=13,
         y=0.995
     )
@@ -634,6 +811,12 @@ async def compute_gmm(request: ComputeRequest):
                 config_dict["mdn_params"] = {
                     "model_path": request.em_params.mdn_params.model_path,
                     "device": request.em_params.mdn_params.device,
+                }
+            # Add LAMF parameters if provided
+            if request.em_params.lamf_params:
+                config_dict["lamf_params"] = {
+                    "model_path": request.em_params.lamf_params.model_path,
+                    "device": request.em_params.lamf_params.device,
                 }
         elif request.method == "lp" and request.lp_params:
             config_dict.update({

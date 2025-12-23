@@ -53,7 +53,17 @@ webapp/frontend/.nyc_output/
 
 # MDN model files
 ml_init/checkpoints/*.pt
+ml_init/checkpoints_v*/
 ml_init/data/*.npz
+ml_init/data_v*/
 ml_init/data_500k/
 ml_init/experiments/
+ml_init/experiments_v*/
 ml_init/experiments_arch/
+ml_init/*.pt
+ml_init/*.json
+
+# LAMF model files
+lamf/checkpoints*/
+lamf/*.log
+lamf/eval_results/
