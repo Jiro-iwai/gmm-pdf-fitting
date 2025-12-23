@@ -572,12 +572,13 @@ def fit_gmm1d_to_pdf_weighted_em(
     reg_var: float = 1e-6,
     n_init: int = 5,
     seed: int = 0,
-    init: str = "quantile",  # "quantile", "random", "qmi", "wqmi", "mdn", or "custom"
+    init: str = "quantile",  # "quantile", "random", "qmi", "wqmi", "mdn", "lamf", or "custom"
     init_params: Optional[Dict] = None,  # Additional parameters for initialization
     use_moment_matching: bool = False,  # Whether to apply moment matching QP projection
     qp_mode: str = "hard",  # "hard" or "soft"
     soft_lambda: float = 1e4,  # Penalty coefficient for soft constraints
     mdn_model_path: Optional[str] = None,  # Path to MDN model (for init="mdn")
+    lamf_model_path: Optional[str] = None,  # Path to LAMF model (for init="lamf")
     mdn_device: str = "auto"  # Device for MDN inference ("cpu", "cuda", or "auto")
 ) -> Tuple[GMM1DParams, float, int]:
     """
@@ -816,6 +817,58 @@ def fit_gmm1d_to_pdf_weighted_em(
                 pi = np.ones(K) / K
                 var = np.ones(K) * var0
             
+        elif init == "lamf":
+            # LAMF initialization: use LAMF model to predict initial parameters
+            try:
+                from src.lamf.infer import LAMFInitError, fit_gmm1d_to_pdf_lamf
+                import os
+                from pathlib import Path
+                
+                # Determine model path (priority: argument > env var > default)
+                if lamf_model_path is not None:
+                    model_path = lamf_model_path
+                elif "LAMF_MODEL_PATH" in os.environ:
+                    model_path = os.environ["LAMF_MODEL_PATH"]
+                else:
+                    # Default path: ./lamf/checkpoints_pdf02
+                    model_path = "lamf/checkpoints_pdf02"
+                
+                # Try LAMF prediction
+                try:
+                    lamf_result = fit_gmm1d_to_pdf_lamf(
+                        z, f_norm, K=K,
+                        model_path=model_path,
+                        device=mdn_device,  # Use same device setting
+                        fallback_to_em=False,  # Don't fallback within LAMF
+                        validate_result=True,
+                    )
+                    pi_init = lamf_result["pi"]
+                    mu_init = lamf_result["mu"]
+                    var_init = np.maximum(lamf_result["var"], reg_var)  # Clip to reg_var
+                except LAMFInitError:
+                    # Fallback to quantile initialization
+                    w_fallback = _grid_weights_from_pdf(z, f_norm)
+                    cdf = np.cumsum(w_fallback)
+                    qs = (np.arange(K) + 0.5) / K
+                    mu_init = np.interp(qs, cdf, z)
+                    mu_init = mu_init + rng.normal(scale=0.05*np.sqrt(var0), size=K)
+                    pi_init = np.ones(K) / K
+                    var_init = np.ones(K) * var0
+                
+                pi = pi_init
+                mu = mu_init
+                var = var_init
+                
+            except ImportError:
+                # LAMF module not available, fallback to quantile initialization
+                w_fallback = _grid_weights_from_pdf(z, f_norm)
+                cdf = np.cumsum(w_fallback)
+                qs = (np.arange(K) + 0.5) / K
+                mu = np.interp(qs, cdf, z)
+                mu = mu + rng.normal(scale=0.05*np.sqrt(var0), size=K)
+                pi = np.ones(K) / K
+                var = np.ones(K) * var0
+        
         elif init == "custom":
             # Custom initialization: use provided pi, mu, var
             if init_params is None:
@@ -852,7 +905,7 @@ def fit_gmm1d_to_pdf_weighted_em(
                 var = np.maximum(var, reg_var)
             
         else:
-            raise ValueError(f"init must be 'quantile', 'random', 'qmi', 'wqmi', 'mdn', or 'custom', got '{init}'")
+            raise ValueError(f"init must be 'quantile', 'random', 'qmi', 'wqmi', 'mdn', 'lamf', or 'custom', got '{init}'")
 
         # Record initialization time for this trial
         total_init_time += time.time() - init_start_time

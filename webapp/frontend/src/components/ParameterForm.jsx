@@ -145,6 +145,13 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
       console.warn('Failed to save parameters:', e)
     }
   }, [formData])
+  
+  // Auto-set K=5 when LAMF method is selected
+  useEffect(() => {
+    if (formData.method === 'lamf' && formData.K !== 5) {
+      setFormData((prev) => ({ ...prev, K: 5 }))
+    }
+  }, [formData.method, formData.K])
 
   const handleChange = (field) => (event) => {
     const value = event.target.type === 'checkbox' ? event.target.checked : event.target.value
@@ -195,16 +202,33 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
         ...prev,
         [field]: value,
       }
-      // If init is changed to 'mdn', set n_init to 1
-      if (field === 'init' && value === 'mdn') {
+      // If init is changed to 'mdn' or 'lamf', set n_init to 1
+      if (field === 'init' && (value === 'mdn' || value === 'lamf')) {
         newData.n_init = 1
       }
-      // If init is changed from 'mdn' to something else, restore n_init to default
-      if (field === 'init' && value !== 'mdn' && prev.init === 'mdn') {
+      // If init is changed from 'mdn'/'lamf' to something else, restore n_init to default
+      if (field === 'init' && value !== 'mdn' && value !== 'lamf' && (prev.init === 'mdn' || prev.init === 'lamf')) {
         newData.n_init = 8
       }
       return newData
     })
+  }
+
+  const handleFocus = (field) => () => {
+    // Mark field as being edited when it receives focus
+    setEditingFields((prevEditing) => ({ ...prevEditing, [field]: true }))
+    
+    // For exponential fields, convert number to exponential string when focused
+    if (EXPONENTIAL_FIELDS.includes(field)) {
+      setFormData((prev) => {
+        const value = prev[field]
+        // If value is a number, convert to exponential string
+        if (typeof value === 'number') {
+          return { ...prev, [field]: formatExponential(value, true) }
+        }
+        return prev
+      })
+    }
   }
 
   const handleBlur = (field, defaultValue) => (event) => {
@@ -358,6 +382,13 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
         request.em_params.mdn_params = {
           model_path: normalizedData.mdn_model_path || './ml_init/checkpoints_v5',
           device: normalizedData.mdn_device || 'auto',
+        }
+      }
+      // Add LAMF parameters if init is 'lamf'
+      if (normalizedData.init === 'lamf') {
+        request.em_params.lamf_params = {
+          model_path: './lamf/checkpoints_v4',
+          device: 'auto',
         }
       }
     } else if (normalizedData.method === 'lp') {
@@ -789,6 +820,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                   <MenuItem value="em">EM Algorithm</MenuItem>
                   <MenuItem value="lp">LP Algorithm</MenuItem>
                   <MenuItem value="hybrid">Hybrid (LP→EM→QP)</MenuItem>
+                  <MenuItem value="lamf">LAMF (Neural Network)</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -802,8 +834,21 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                 onBlur={handleBlur('K', 3)}
                 margin="normal"
                 inputProps={{ min: 1, max: 50 }}
+                disabled={formData.method === 'lamf'}
+                helperText={formData.method === 'lamf' ? 'LAMF model requires K=5' : ''}
               />
             </Grid>
+            {formData.method === 'lamf' && (
+              <Grid item xs={12}>
+                <Typography variant="body2" color="textSecondary" sx={{ mt: 1, mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                  <strong>LAMF (Learned Accelerated Mixture Fitter)</strong><br />
+                  Direct neural network inference for GMM fitting. No iterative optimization required.<br />
+                  • Fixed K=5 components, T=6 refinement steps<br />
+                  • Fastest method (~2ms inference time)<br />
+                  • Trained on V5 dataset (σ∈[0.1,5], ρ∈[-0.999,0.999])
+                </Typography>
+              </Grid>
+            )}
           </Grid>
         </AccordionDetails>
       </Accordion>
@@ -835,6 +880,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                   type="text"
                   value={editingFields.tol ? formData.tol : formatExponential(formData.tol, true)}
                   onChange={handleChange('tol')}
+                  onFocus={handleFocus('tol')}
                   onBlur={handleBlur('tol', 1e-10)}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
@@ -849,6 +895,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                   type="text"
                   value={editingFields.reg_var ? formData.reg_var : formatExponential(formData.reg_var, true)}
                   onChange={handleChange('reg_var')}
+                  onFocus={handleFocus('reg_var')}
                   onBlur={handleBlur('reg_var', 1e-6)}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                   margin="normal"
@@ -902,6 +949,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                       <MenuItem value="qmi">QMI</MenuItem>
                       <MenuItem value="wqmi">WQMI</MenuItem>
                       <MenuItem value="mdn">MDN (Machine Learning)</MenuItem>
+                      <MenuItem value="lamf">LAMF (Neural Network)</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -970,6 +1018,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                       type="text"
                       value={editingFields.soft_lambda ? formData.soft_lambda : formatExponential(formData.soft_lambda, true)}
                       onChange={handleChange('soft_lambda')}
+                      onFocus={handleFocus('soft_lambda')}
                       onBlur={handleBlur('soft_lambda', 1e4)}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
@@ -1102,6 +1151,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
                       type="text"
                       value={editingFields.pdf_tolerance ? formData.pdf_tolerance : formatExponential(formData.pdf_tolerance, true)}
                       onChange={handleChange('pdf_tolerance')}
+                      onFocus={handleFocus('pdf_tolerance')}
                       onBlur={handleBlur('pdf_tolerance', null)}
                       onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
                       margin="normal"
