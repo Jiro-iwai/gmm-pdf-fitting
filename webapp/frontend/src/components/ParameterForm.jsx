@@ -387,7 +387,7 @@ const ParameterForm = forwardRef(({ onSubmit, loading }, ref) => {
       // Add LAMF parameters if init is 'lamf'
       if (normalizedData.init === 'lamf') {
         request.em_params.lamf_params = {
-          model_path: './lamf/checkpoints_v4',
+          model_path: './lamf/checkpoints_v5',
           device: 'auto',
         }
       }

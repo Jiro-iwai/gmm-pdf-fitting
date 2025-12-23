@@ -285,14 +285,166 @@ def compute_pdf_l2_loss(
     return l2_loss
 
 
+def compute_pdf_linf_loss(
+    z: torch.Tensor,
+    f_true: torch.Tensor,
+    pi: torch.Tensor,
+    mu: torch.Tensor,
+    sigma: torch.Tensor,
+    alpha: float = 10.0,
+) -> torch.Tensor:
+    """
+    Compute soft L∞ loss using LogSumExp approximation.
+    
+    L_linf ≈ (1/α) * log(Σ exp(α * |f_true - f_hat|))
+    
+    As α → ∞, this converges to max(|f_true - f_hat|).
+    
+    Parameters:
+    -----------
+    z : torch.Tensor
+        Grid points, shape (N,)
+    f_true : torch.Tensor
+        True PDF values, shape (batch_size, N)
+    pi : torch.Tensor
+        Predicted mixing weights, shape (batch_size, K)
+    mu : torch.Tensor
+        Predicted means, shape (batch_size, K)
+    sigma : torch.Tensor
+        Predicted standard deviations, shape (batch_size, K)
+    alpha : float
+        Softmax temperature. Higher = closer to true L∞.
+        Recommended: 10-50
+    
+    Returns:
+    --------
+    loss : torch.Tensor
+        Soft L∞ loss, shape (batch_size,)
+    """
+    f_hat = compute_gmm_pdf(z, pi, mu, sigma)  # (batch_size, N)
+    
+    # Absolute error at each grid point
+    abs_error = torch.abs(f_true - f_hat)  # (batch_size, N)
+    
+    # Soft L∞ using LogSumExp: (1/α) * logsumexp(α * |error|)
+    soft_linf = torch.logsumexp(alpha * abs_error, dim=-1) / alpha  # (batch_size,)
+    
+    return soft_linf
+
+
+def compute_pdf_topk_loss(
+    z: torch.Tensor,
+    f_true: torch.Tensor,
+    pi: torch.Tensor,
+    mu: torch.Tensor,
+    sigma: torch.Tensor,
+    k: int = 10,
+) -> torch.Tensor:
+    """
+    Compute Top-k loss: average of k largest absolute errors.
+    
+    This focuses on the worst errors without being as extreme as L∞.
+    
+    Parameters:
+    -----------
+    z : torch.Tensor
+        Grid points, shape (N,)
+    f_true : torch.Tensor
+        True PDF values, shape (batch_size, N)
+    pi : torch.Tensor
+        Predicted mixing weights, shape (batch_size, K)
+    mu : torch.Tensor
+        Predicted means, shape (batch_size, K)
+    sigma : torch.Tensor
+        Predicted standard deviations, shape (batch_size, K)
+    k : int
+        Number of top errors to average
+    
+    Returns:
+    --------
+    loss : torch.Tensor
+        Top-k loss, shape (batch_size,)
+    """
+    f_hat = compute_gmm_pdf(z, pi, mu, sigma)  # (batch_size, N)
+    
+    # Absolute error at each grid point
+    abs_error = torch.abs(f_true - f_hat)  # (batch_size, N)
+    
+    # Get top-k errors
+    N = abs_error.shape[-1]
+    k = min(k, N)
+    topk_errors, _ = torch.topk(abs_error, k, dim=-1)  # (batch_size, k)
+    
+    # Average of top-k errors
+    topk_loss = topk_errors.mean(dim=-1)  # (batch_size,)
+    
+    return topk_loss
+
+
+def compute_pdf_huber_linf_loss(
+    z: torch.Tensor,
+    f_true: torch.Tensor,
+    pi: torch.Tensor,
+    mu: torch.Tensor,
+    sigma: torch.Tensor,
+    delta: float = 0.01,
+    alpha: float = 20.0,
+) -> torch.Tensor:
+    """
+    Compute Huber-style soft L∞ loss.
+    
+    Applies Huber transformation before soft L∞ to emphasize large errors.
+    For |error| < delta: 0.5 * error^2 / delta
+    For |error| >= delta: |error| - 0.5 * delta
+    
+    Parameters:
+    -----------
+    z : torch.Tensor
+        Grid points, shape (N,)
+    f_true : torch.Tensor
+        True PDF values, shape (batch_size, N)
+    pi, mu, sigma : torch.Tensor
+        GMM parameters
+    delta : float
+        Huber threshold. Errors above this are penalized linearly.
+    alpha : float
+        Softmax temperature for L∞ approximation.
+    
+    Returns:
+    --------
+    loss : torch.Tensor
+        Huber L∞ loss, shape (batch_size,)
+    """
+    f_hat = compute_gmm_pdf(z, pi, mu, sigma)  # (batch_size, N)
+    
+    # Absolute error
+    abs_error = torch.abs(f_true - f_hat)  # (batch_size, N)
+    
+    # Huber transformation
+    huber_error = torch.where(
+        abs_error < delta,
+        0.5 * abs_error ** 2 / delta,
+        abs_error - 0.5 * delta
+    )
+    
+    # Soft L∞ using LogSumExp
+    soft_linf = torch.logsumexp(alpha * huber_error, dim=-1) / alpha
+    
+    return soft_linf
+
+
 def compute_deep_supervision_loss(
     z: torch.Tensor,
     w: torch.Tensor,
     intermediate_params: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
     lambda_mom: float = 0.0,
     lambda_pdf: float = 0.0,
+    lambda_linf: float = 0.0,
+    lambda_topk: float = 0.0,
     f_true: torch.Tensor = None,
     eta_schedule: str = "linear",
+    linf_alpha: float = 20.0,
+    topk_k: int = 10,
 ) -> torch.Tensor:
     """
     Compute deep supervision loss over all intermediate outputs.
@@ -309,10 +461,18 @@ def compute_deep_supervision_loss(
         Weight for moment loss
     lambda_pdf : float
         Weight for PDF L2 loss (0 = CE only, 1 = PDF L2 only)
+    lambda_linf : float
+        Weight for soft L∞ loss (additional penalty for max errors)
+    lambda_topk : float
+        Weight for top-k loss (additional penalty for k largest errors)
     f_true : torch.Tensor
         True PDF values, shape (batch_size, N). Required if lambda_pdf > 0.
     eta_schedule : str
         Weighting schedule: "uniform", "linear" (later heavier), "final_only"
+    linf_alpha : float
+        Temperature for soft L∞ (higher = closer to true max)
+    topk_k : int
+        Number of top errors to average for top-k loss
     
     Returns:
     --------
@@ -354,6 +514,16 @@ def compute_deep_supervision_loss(
         if lambda_mom > 0:
             mom_loss = compute_moment_loss(z, w, pi, mu, sigma)
             loss_t = loss_t + lambda_mom * mom_loss
+        
+        # Soft L∞ loss (additional penalty for max errors)
+        if lambda_linf > 0 and f_true is not None:
+            linf_loss = compute_pdf_linf_loss(z, f_true, pi, mu, sigma, alpha=linf_alpha)
+            loss_t = loss_t + lambda_linf * linf_loss
+        
+        # Top-k loss (additional penalty for k largest errors)
+        if lambda_topk > 0 and f_true is not None:
+            topk_loss = compute_pdf_topk_loss(z, f_true, pi, mu, sigma, k=topk_k)
+            loss_t = loss_t + lambda_topk * topk_loss
         
         # Weighted sum
         total_loss = total_loss + eta[t] * loss_t.mean()

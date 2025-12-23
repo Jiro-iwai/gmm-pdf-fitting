@@ -165,6 +165,74 @@ class ParameterTransform:
 
 
 # ==============================================================================
+# Positional Encoding for V5 architecture
+# ==============================================================================
+
+class SinusoidalPositionalEncoding(nn.Module):
+    """
+    Sinusoidal positional encoding for grid positions.
+    
+    PE(pos, 2i) = sin(pos / 10000^(2i/d_model))
+    PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))
+    """
+    
+    def __init__(self, d_model: int = 64, max_len: int = 256):
+        super().__init__()
+        
+        self.d_model = d_model
+        
+        # Create positional encoding matrix
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        
+        self.register_buffer('pe', pe)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Add positional encoding to input.
+        
+        Parameters:
+        -----------
+        x : torch.Tensor
+            Input tensor, shape (batch_size, seq_len, d_model)
+        
+        Returns:
+        --------
+        output : torch.Tensor
+            Input with positional encoding added
+        """
+        seq_len = x.shape[1]
+        return x + self.pe[:seq_len].unsqueeze(0)
+
+
+class LearnedPositionalEncoding(nn.Module):
+    """
+    Learned positional encoding using grid positions.
+    """
+    
+    def __init__(self, N: int = 96, d_model: int = 64):
+        super().__init__()
+        self.embedding = nn.Embedding(N, d_model)
+    
+    def forward(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """
+        Generate positional encoding.
+        
+        Returns:
+        --------
+        pe : torch.Tensor
+            Positional encoding, shape (batch_size, N, d_model)
+        """
+        positions = torch.arange(self.embedding.num_embeddings, device=device)
+        pe = self.embedding(positions)  # (N, d_model)
+        return pe.unsqueeze(0).expand(batch_size, -1, -1)
+
+
+# ==============================================================================
 # InitNet: Initial parameter prediction (Section 5.1)
 # ==============================================================================
 
@@ -299,6 +367,211 @@ class InitNet(nn.Module):
         
         # Forward through MLP
         h = self.hidden(x)
+        
+        # Output unconstrained parameters
+        alpha = self.fc_alpha(h)
+        c = self.fc_c(h)
+        beta = self.fc_beta(h)
+        gamma = self.fc_gamma(h)
+        
+        return alpha, c, beta, gamma
+
+
+# ==============================================================================
+# InitNetV2: Enhanced InitNet with Attention (V5 architecture)
+# ==============================================================================
+
+class InitNetV2(nn.Module):
+    """
+    Enhanced InitNet with positional encoding and self-attention.
+    
+    Architecture:
+    1. Per-point features: w, log(w), cdf(w) -> MLP -> point embeddings
+    2. Add positional encoding
+    3. Self-attention layers to capture global context
+    4. Pool and predict GMM parameters
+    """
+    
+    def __init__(
+        self,
+        N: int = 96,
+        K: int = 5,
+        hidden_dim: int = 256,
+        num_layers: int = 3,
+        num_attention_layers: int = 2,
+        num_heads: int = 4,
+        dropout: float = 0.1,
+        use_log_input: bool = True,
+        use_cdf_input: bool = True,
+        pe_type: str = "sinusoidal",  # "sinusoidal", "learned", or "none"
+    ):
+        """
+        Initialize InitNetV2.
+        
+        Parameters:
+        -----------
+        N : int
+            Number of grid points
+        K : int
+            Number of GMM components
+        hidden_dim : int
+            Hidden layer dimension
+        num_layers : int
+            Number of MLP layers for point embedding
+        num_attention_layers : int
+            Number of self-attention layers
+        num_heads : int
+            Number of attention heads
+        dropout : float
+            Dropout probability
+        use_log_input : bool
+            If True, include log(w + eps) as input feature
+        use_cdf_input : bool
+            If True, include cumulative sum (CDF) as input feature
+        pe_type : str
+            Type of positional encoding: "sinusoidal", "learned", or "none"
+        """
+        super().__init__()
+        
+        self.N = N
+        self.K = K
+        self.use_log_input = use_log_input
+        self.use_cdf_input = use_cdf_input
+        self.pe_type = pe_type
+        
+        # Input features per grid point: w, (log_w), (cdf_w)
+        features_per_point = 1
+        if use_log_input:
+            features_per_point += 1
+        if use_cdf_input:
+            features_per_point += 1
+        
+        # Point embedding MLP (per-point features -> hidden_dim)
+        self.point_embed = nn.Sequential(
+            nn.Linear(features_per_point, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+        )
+        
+        # Positional encoding
+        if pe_type == "sinusoidal":
+            self.pe = SinusoidalPositionalEncoding(d_model=hidden_dim, max_len=N)
+        elif pe_type == "learned":
+            self.pe = LearnedPositionalEncoding(N=N, d_model=hidden_dim)
+        else:
+            self.pe = None
+        
+        # Self-attention layers
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim * 4,
+            dropout=dropout,
+            activation='relu',
+            batch_first=True,
+            norm_first=True,  # Pre-norm for stability
+        )
+        self.attention = nn.TransformerEncoder(encoder_layer, num_layers=num_attention_layers)
+        
+        # Global pooling + MLP
+        self.global_mlp = nn.Sequential(
+            nn.Linear(hidden_dim * 2, hidden_dim),  # *2 for mean + max pooling
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+        )
+        
+        for _ in range(num_layers - 1):
+            self.global_mlp.append(nn.Linear(hidden_dim, hidden_dim))
+            self.global_mlp.append(nn.LayerNorm(hidden_dim))
+            self.global_mlp.append(nn.ReLU())
+            self.global_mlp.append(nn.Dropout(dropout))
+        
+        # Output heads for unconstrained parameters
+        self.fc_alpha = nn.Linear(hidden_dim, K)
+        self.fc_c = nn.Linear(hidden_dim, 1)
+        self.fc_beta = nn.Linear(hidden_dim, K - 1)
+        self.fc_gamma = nn.Linear(hidden_dim, K)
+        
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        """Initialize weights."""
+        # Point embedding
+        for module in self.point_embed:
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
+                nn.init.zeros_(module.bias)
+        
+        # Global MLP
+        for module in self.global_mlp:
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, nonlinearity='relu')
+                nn.init.zeros_(module.bias)
+        
+        # Output layers: Xavier initialization
+        for fc in [self.fc_alpha, self.fc_c, self.fc_beta, self.fc_gamma]:
+            nn.init.xavier_uniform_(fc.weight)
+            nn.init.zeros_(fc.bias)
+    
+    def forward(
+        self,
+        w: torch.Tensor,
+        z: Optional[torch.Tensor] = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Forward pass.
+        
+        Parameters:
+        -----------
+        w : torch.Tensor
+            PDF mass values, shape (batch_size, N), sum to 1
+        z : torch.Tensor, optional
+            Grid points, shape (N,) - can be used for position encoding
+        
+        Returns:
+        --------
+        alpha, c, beta, gamma : torch.Tensor
+            Unconstrained GMM parameters
+        """
+        batch_size, N = w.shape
+        eps = 1e-12
+        device = w.device
+        
+        # Build per-point features: (batch_size, N, features_per_point)
+        features = [w.unsqueeze(-1)]  # (batch_size, N, 1)
+        
+        if self.use_log_input:
+            log_w = torch.log(w + eps).unsqueeze(-1)
+            features.append(log_w)
+        
+        if self.use_cdf_input:
+            cdf_w = torch.cumsum(w, dim=-1).unsqueeze(-1)
+            features.append(cdf_w)
+        
+        x = torch.cat(features, dim=-1)  # (batch_size, N, features_per_point)
+        
+        # Point embedding
+        x = self.point_embed(x)  # (batch_size, N, hidden_dim)
+        
+        # Add positional encoding
+        if self.pe is not None:
+            if self.pe_type == "sinusoidal":
+                x = self.pe(x)
+            else:  # learned
+                x = x + self.pe(batch_size, device)
+        
+        # Self-attention
+        x = self.attention(x)  # (batch_size, N, hidden_dim)
+        
+        # Global pooling: mean + max
+        x_mean = x.mean(dim=1)  # (batch_size, hidden_dim)
+        x_max = x.max(dim=1)[0]  # (batch_size, hidden_dim)
+        h = torch.cat([x_mean, x_max], dim=-1)  # (batch_size, hidden_dim * 2)
+        
+        # Global MLP
+        h = self.global_mlp(h)  # (batch_size, hidden_dim)
         
         # Output unconstrained parameters
         alpha = self.fc_alpha(h)
@@ -727,6 +1000,11 @@ class LAMFFitter(nn.Module):
         corr_scale: float = 0.5,
         dropout: float = 0.1,
         share_refine_weights: bool = True,
+        # V5 architecture options
+        use_attention: bool = False,
+        num_attention_layers: int = 2,
+        num_attention_heads: int = 4,
+        pe_type: str = "sinusoidal",
     ):
         """
         Initialize LAMF model.
@@ -759,6 +1037,14 @@ class LAMFFitter(nn.Module):
             Dropout probability
         share_refine_weights : bool
             If True, all RefineBlocks share weights
+        use_attention : bool
+            If True, use InitNetV2 with attention (V5 architecture)
+        num_attention_layers : int
+            Number of attention layers in InitNetV2
+        num_attention_heads : int
+            Number of attention heads in InitNetV2
+        pe_type : str
+            Positional encoding type for InitNetV2: "sinusoidal", "learned", "none"
         """
         super().__init__()
         
@@ -769,18 +1055,31 @@ class LAMFFitter(nn.Module):
         self.sigma_max = sigma_max
         self.pi_min = pi_min
         self.corr_scale = corr_scale
+        self.use_attention = use_attention
         
         # Parameter transform
         self.transform = ParameterTransform(sigma_min=sigma_min, pi_min=pi_min)
         
-        # InitNet
-        self.init_net = InitNet(
-            N=N,
-            K=K,
-            hidden_dim=init_hidden_dim,
-            num_layers=init_num_layers,
-            dropout=dropout,
-        )
+        # InitNet (V4 or V5 with attention)
+        if use_attention:
+            self.init_net = InitNetV2(
+                N=N,
+                K=K,
+                hidden_dim=init_hidden_dim,
+                num_layers=init_num_layers,
+                num_attention_layers=num_attention_layers,
+                num_heads=num_attention_heads,
+                dropout=dropout,
+                pe_type=pe_type,
+            )
+        else:
+            self.init_net = InitNet(
+                N=N,
+                K=K,
+                hidden_dim=init_hidden_dim,
+                num_layers=init_num_layers,
+                dropout=dropout,
+            )
         
         # RefineBlocks
         if share_refine_weights:
