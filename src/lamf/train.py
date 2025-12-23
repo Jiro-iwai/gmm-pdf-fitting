@@ -90,8 +90,12 @@ def train_one_epoch(
     device: torch.device,
     lambda_mom: float = 0.0,
     lambda_pdf: float = 0.0,
+    lambda_linf: float = 0.0,
+    lambda_topk: float = 0.0,
     eta_schedule: str = "linear",
     grad_clip: float = 1.0,
+    linf_alpha: float = 20.0,
+    topk_k: int = 10,
 ) -> dict:
     """
     Train for one epoch.
@@ -110,10 +114,18 @@ def train_one_epoch(
         Weight for moment loss
     lambda_pdf : float
         Weight for PDF L2 loss (0 = CE only, 1 = PDF L2 only)
+    lambda_linf : float
+        Weight for soft L∞ loss (penalty for max errors)
+    lambda_topk : float
+        Weight for top-k loss (penalty for k largest errors)
     eta_schedule : str
         Deep supervision weight schedule
     grad_clip : float
         Gradient clipping value
+    linf_alpha : float
+        Temperature for soft L∞ (higher = closer to true max)
+    topk_k : int
+        Number of top errors to average for top-k loss
     
     Returns:
     --------
@@ -126,12 +138,16 @@ def train_one_epoch(
     total_ce = 0.0
     total_pdf = 0.0
     total_mom = 0.0
+    total_linf = 0.0
     n_batches = 0
+    
+    # Determine if we need f_true (for any PDF-based loss)
+    need_f_true = lambda_pdf > 0 or lambda_linf > 0 or lambda_topk > 0
     
     for batch in train_loader:
         z = batch['z'][0].to(device)  # (N,) - same for all samples
         w = batch['w'].to(device)  # (batch_size, N)
-        f_true = batch['f'].to(device) if lambda_pdf > 0 else None  # (batch_size, N)
+        f_true = batch['f'].to(device) if need_f_true else None  # (batch_size, N)
         
         optimizer.zero_grad()
         
@@ -144,8 +160,12 @@ def train_one_epoch(
             z, w, intermediate,
             lambda_mom=lambda_mom,
             lambda_pdf=lambda_pdf,
+            lambda_linf=lambda_linf,
+            lambda_topk=lambda_topk,
             f_true=f_true,
             eta_schedule=eta_schedule,
+            linf_alpha=linf_alpha,
+            topk_k=topk_k,
         )
         
         # NaN/Inf detection: skip batch if loss is invalid
@@ -179,6 +199,12 @@ def train_one_epoch(
             if lambda_mom > 0:
                 mom = compute_moment_loss(z, w, final_pi, final_mu, final_sigma).mean()
                 total_mom += mom.item()
+            
+            if (lambda_linf > 0 or lambda_topk > 0) and f_true is not None:
+                from .metrics import compute_gmm_pdf, compute_pdf_linf_error
+                f_hat = compute_gmm_pdf(z, final_pi, final_mu, final_sigma)
+                linf = compute_pdf_linf_error(z, f_true, f_hat).mean()
+                total_linf += linf.item()
         
         n_batches += 1
     
@@ -187,6 +213,7 @@ def train_one_epoch(
         'ce': total_ce / n_batches,
         'pdf': total_pdf / n_batches if lambda_pdf > 0 else 0.0,
         'mom': total_mom / n_batches if lambda_mom > 0 else 0.0,
+        'linf': total_linf / n_batches if (lambda_linf > 0 or lambda_topk > 0) else 0.0,
     }
 
 
@@ -278,6 +305,11 @@ def train_lamf(
     corr_scale: float = 0.5,
     dropout: float = 0.1,
     share_refine_weights: bool = True,
+    # V5 architecture options
+    use_attention: bool = False,
+    num_attention_layers: int = 2,
+    num_attention_heads: int = 4,
+    pe_type: str = "sinusoidal",
     # Training hyperparameters
     batch_size: int = 64,
     lr: float = 1e-3,
@@ -285,11 +317,20 @@ def train_lamf(
     epochs: int = 50,
     lambda_mom: float = 0.0,
     lambda_pdf: float = 0.0,
+    lambda_linf: float = 0.0,
+    lambda_topk: float = 0.0,
+    linf_alpha: float = 20.0,
+    topk_k: int = 10,
     # Lambda PDF curriculum
     lambda_pdf_curriculum: bool = False,
     lambda_pdf_start_epoch: int = 5,
     lambda_pdf_end_epoch: int = 15,
     lambda_pdf_max: float = 0.1,
+    # Lambda L∞ curriculum
+    lambda_linf_curriculum: bool = False,
+    lambda_linf_start_epoch: int = 10,
+    lambda_linf_end_epoch: int = 30,
+    lambda_linf_max: float = 1.0,
     eta_schedule: str = "linear",
     grad_clip: float = 1.0,
     # Scheduler
@@ -366,9 +407,15 @@ def train_lamf(
         corr_scale=corr_scale,
         dropout=dropout,
         share_refine_weights=share_refine_weights,
+        use_attention=use_attention,
+        num_attention_layers=num_attention_layers,
+        num_attention_heads=num_attention_heads,
+        pe_type=pe_type,
     ).to(device)
     
     n_params = sum(p.numel() for p in model.parameters())
+    arch_str = "V5 (attention)" if use_attention else "V4 (MLP)"
+    print(f"Model architecture: {arch_str}")
     print(f"Model parameters: {n_params:,}")
     
     # Optimizer
@@ -420,6 +467,12 @@ def train_lamf(
     print(f"\nStarting training for {epochs} epochs...")
     if lambda_pdf_curriculum:
         print(f"Lambda PDF curriculum: epoch {lambda_pdf_start_epoch} -> {lambda_pdf_end_epoch}, max={lambda_pdf_max}")
+    if lambda_linf_curriculum:
+        print(f"Lambda L∞ curriculum: epoch {lambda_linf_start_epoch} -> {lambda_linf_end_epoch}, max={lambda_linf_max}")
+    if lambda_linf > 0 and not lambda_linf_curriculum:
+        print(f"Lambda L∞: {lambda_linf} (fixed), alpha={linf_alpha}")
+    if lambda_topk > 0:
+        print(f"Lambda Top-k: {lambda_topk}, k={topk_k}")
     start_time = time.time()
     
     for epoch in range(1, epochs + 1):
@@ -444,13 +497,30 @@ def train_lamf(
         else:
             current_lambda_pdf = lambda_pdf
         
+        # Calculate lambda_linf for this epoch (curriculum or fixed)
+        if lambda_linf_curriculum:
+            if epoch < lambda_linf_start_epoch:
+                current_lambda_linf = 0.0
+            elif epoch >= lambda_linf_end_epoch:
+                current_lambda_linf = lambda_linf_max
+            else:
+                # Linear interpolation
+                progress = (epoch - lambda_linf_start_epoch) / (lambda_linf_end_epoch - lambda_linf_start_epoch)
+                current_lambda_linf = lambda_linf_max * progress
+        else:
+            current_lambda_linf = lambda_linf
+        
         # Train
         train_metrics = train_one_epoch(
             model, train_loader, optimizer, device,
             lambda_mom=lambda_mom,
             lambda_pdf=current_lambda_pdf,
+            lambda_linf=current_lambda_linf,
+            lambda_topk=lambda_topk,
             eta_schedule=eta_schedule,
             grad_clip=grad_clip,
+            linf_alpha=linf_alpha,
+            topk_k=topk_k,
         )
         
         # Update EMA after each epoch
@@ -507,11 +577,16 @@ def train_lamf(
         
         # Print progress
         epoch_time = time.time() - epoch_start
-        curriculum_str = f" | λ_pdf: {current_lambda_pdf:.3f}" if lambda_pdf_curriculum else ""
+        curriculum_str = ""
+        if lambda_pdf_curriculum:
+            curriculum_str += f" | λ_pdf: {current_lambda_pdf:.3f}"
+        if lambda_linf_curriculum:
+            curriculum_str += f" | λ_linf: {current_lambda_linf:.3f}"
+        linf_str = f" | Train L∞: {train_metrics.get('linf', 0):.4f}" if train_metrics.get('linf', 0) > 0 else ""
         print(
             f"Epoch {epoch:3d}/{epochs} | "
             f"Loss: {train_metrics['loss']:.4f} | "
-            f"Train CE: {train_metrics['ce']:.4f} | "
+            f"Train CE: {train_metrics['ce']:.4f}{linf_str} | "
             f"Val CE: {val_metrics['ce']:.4f} | "
             f"Val PDF L∞: {val_metrics['pdf_linf']:.4f} | "
             f"Val CDF L∞: {val_metrics['cdf_linf']:.4f} | "
@@ -657,6 +732,17 @@ def main():
     parser.add_argument("--no_share_weights", action="store_true",
                         help="Use separate RefineBlock weights for each iteration")
     
+    # V5 architecture options
+    parser.add_argument("--use_attention", action="store_true",
+                        help="Use InitNetV2 with attention (V5 architecture)")
+    parser.add_argument("--num_attention_layers", type=int, default=2,
+                        help="Number of attention layers in InitNetV2")
+    parser.add_argument("--num_attention_heads", type=int, default=4,
+                        help="Number of attention heads in InitNetV2")
+    parser.add_argument("--pe_type", type=str, default="sinusoidal",
+                        choices=["sinusoidal", "learned", "none"],
+                        help="Positional encoding type for InitNetV2")
+    
     # Training
     parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
@@ -665,6 +751,14 @@ def main():
     parser.add_argument("--lambda_mom", type=float, default=0.0, help="Moment loss weight")
     parser.add_argument("--lambda_pdf", type=float, default=0.0,
                         help="PDF L2 loss weight (0=CE only, 0.5=50%% CE + 50%% PDF, 1=PDF only)")
+    parser.add_argument("--lambda_linf", type=float, default=0.0,
+                        help="Soft L∞ loss weight (penalty for max errors)")
+    parser.add_argument("--lambda_topk", type=float, default=0.0,
+                        help="Top-k loss weight (penalty for k largest errors)")
+    parser.add_argument("--linf_alpha", type=float, default=20.0,
+                        help="Temperature for soft L∞ (higher = closer to true max)")
+    parser.add_argument("--topk_k", type=int, default=10,
+                        help="Number of top errors to average for top-k loss")
     
     # Lambda PDF curriculum
     parser.add_argument("--lambda_pdf_curriculum", action="store_true",
@@ -675,6 +769,16 @@ def main():
                         help="Epoch to finish ramping lambda_pdf")
     parser.add_argument("--lambda_pdf_max", type=float, default=0.1,
                         help="Maximum lambda_pdf value for curriculum")
+    
+    # Lambda L∞ curriculum
+    parser.add_argument("--lambda_linf_curriculum", action="store_true",
+                        help="Use curriculum for lambda_linf (start at 0, ramp up)")
+    parser.add_argument("--lambda_linf_start_epoch", type=int, default=10,
+                        help="Epoch to start ramping lambda_linf")
+    parser.add_argument("--lambda_linf_end_epoch", type=int, default=30,
+                        help="Epoch to finish ramping lambda_linf")
+    parser.add_argument("--lambda_linf_max", type=float, default=1.0,
+                        help="Maximum lambda_linf value for curriculum")
     
     parser.add_argument("--eta_schedule", type=str, default="linear",
                         choices=["uniform", "linear", "final_only"],
@@ -716,16 +820,28 @@ def main():
         corr_scale=args.corr_scale,
         dropout=args.dropout,
         share_refine_weights=not args.no_share_weights,
+        use_attention=args.use_attention,
+        num_attention_layers=args.num_attention_layers,
+        num_attention_heads=args.num_attention_heads,
+        pe_type=args.pe_type,
         batch_size=args.batch_size,
         lr=args.lr,
         weight_decay=args.weight_decay,
         epochs=args.epochs,
         lambda_mom=args.lambda_mom,
         lambda_pdf=args.lambda_pdf,
+        lambda_linf=args.lambda_linf,
+        lambda_topk=args.lambda_topk,
+        linf_alpha=args.linf_alpha,
+        topk_k=args.topk_k,
         lambda_pdf_curriculum=args.lambda_pdf_curriculum,
         lambda_pdf_start_epoch=args.lambda_pdf_start_epoch,
         lambda_pdf_end_epoch=args.lambda_pdf_end_epoch,
         lambda_pdf_max=args.lambda_pdf_max,
+        lambda_linf_curriculum=args.lambda_linf_curriculum,
+        lambda_linf_start_epoch=args.lambda_linf_start_epoch,
+        lambda_linf_end_epoch=args.lambda_linf_end_epoch,
+        lambda_linf_max=args.lambda_linf_max,
         eta_schedule=args.eta_schedule,
         grad_clip=args.grad_clip,
         use_scheduler=not args.no_scheduler,
