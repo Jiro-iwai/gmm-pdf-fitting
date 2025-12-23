@@ -61,7 +61,7 @@ def get_lamf_model():
         
         # Default LAMF model path
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        model_dir = os.path.join(base_dir, "lamf", "checkpoints_v4")
+        model_dir = os.path.join(base_dir, "lamf", "checkpoints_v5")
         model_path = os.path.join(model_dir, "best_model.pt")
         metadata_path = os.path.join(model_dir, "metadata.json")
         
