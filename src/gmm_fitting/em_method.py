@@ -830,8 +830,8 @@ def fit_gmm1d_to_pdf_weighted_em(
                 elif "LAMF_MODEL_PATH" in os.environ:
                     model_path = os.environ["LAMF_MODEL_PATH"]
                 else:
-                    # Default path: ./lamf/checkpoints_v5
-                    model_path = "lamf/checkpoints_v5"
+                    # Default path: ./lamf/checkpoints_v5_linf_30ep
+                    model_path = "lamf/checkpoints_v5_linf_30ep"
                 
                 # Try LAMF prediction
                 try:

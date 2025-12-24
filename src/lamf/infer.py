@@ -245,9 +245,9 @@ def fit_gmm1d_to_pdf_lamf(
     if model_path is None:
         # Use default LAMF checkpoint (V5)
         default_paths = [
-            Path(__file__).parent.parent.parent / "lamf" / "checkpoints_v5",
-            Path("lamf/checkpoints_v5"),
-            Path("./lamf/checkpoints_v5"),
+            Path(__file__).parent.parent.parent / "lamf" / "checkpoints_v5_linf_30ep",
+            Path("lamf/checkpoints_v5_linf_30ep"),
+            Path("./lamf/checkpoints_v5_linf_30ep"),
         ]
         for p in default_paths:
             if p.exists():
