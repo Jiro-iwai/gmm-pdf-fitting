@@ -824,14 +824,22 @@ def fit_gmm1d_to_pdf_weighted_em(
                 import os
                 from pathlib import Path
                 
+                # LAMF initialization requires a larger sigma floor to prevent
+                # EM from collapsing components to very sharp peaks.
+                # sigma_floor=0.05 (reg_var=0.0025) works well empirically.
+                lamf_sigma_floor = 0.05
+                lamf_reg_var = lamf_sigma_floor ** 2  # 0.0025
+                if reg_var < lamf_reg_var:
+                    reg_var = lamf_reg_var
+                
                 # Determine model path (priority: argument > env var > default)
                 if lamf_model_path is not None:
                     model_path = lamf_model_path
                 elif "LAMF_MODEL_PATH" in os.environ:
                     model_path = os.environ["LAMF_MODEL_PATH"]
                 else:
-                    # Default path: ./lamf/checkpoints_v5
-                    model_path = "lamf/checkpoints_v5"
+                    # Default path: ./lamf/checkpoints_v5_linf_30ep
+                    model_path = "lamf/checkpoints_v5_linf_30ep"
                 
                 # Try LAMF prediction
                 try:
@@ -844,7 +852,10 @@ def fit_gmm1d_to_pdf_weighted_em(
                     )
                     pi_init = lamf_result["pi"]
                     mu_init = lamf_result["mu"]
-                    var_init = np.maximum(lamf_result["var"], reg_var)  # Clip to reg_var
+                    # Use LAMF's sigma_min^2 as minimum variance to maintain consistency
+                    lamf_sigma_min = 0.01  # LAMF model's sigma_min
+                    lamf_reg_var = lamf_sigma_min ** 2  # 0.0001
+                    var_init = np.maximum(lamf_result["var"], max(reg_var, lamf_reg_var))
                 except LAMFInitError:
                     # Fallback to quantile initialization
                     w_fallback = _grid_weights_from_pdf(z, f_norm)

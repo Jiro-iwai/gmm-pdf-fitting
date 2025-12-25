@@ -245,9 +245,9 @@ def fit_gmm1d_to_pdf_lamf(
     if model_path is None:
         # Use default LAMF checkpoint (V5)
         default_paths = [
-            Path(__file__).parent.parent.parent / "lamf" / "checkpoints_v5",
-            Path("lamf/checkpoints_v5"),
-            Path("./lamf/checkpoints_v5"),
+            Path(__file__).parent.parent.parent / "lamf" / "checkpoints_v5_linf_30ep",
+            Path("lamf/checkpoints_v5_linf_30ep"),
+            Path("./lamf/checkpoints_v5_linf_30ep"),
         ]
         for p in default_paths:
             if p.exists():
@@ -295,10 +295,10 @@ def fit_gmm1d_to_pdf_lamf(
         M1_input = np.sum(w * z_model)
         
         # Shift to relative coordinates (center at 0)
-        z_relative = z_model - M1_input
+        z_relative = (z_model - M1_input).astype(np.float32)
         
         # Convert to tensors
-        z_tensor = torch.from_numpy(z_relative).to(device_obj)
+        z_tensor = torch.from_numpy(z_relative).float().to(device_obj)
         w_tensor = torch.from_numpy(w.astype(np.float32)).unsqueeze(0).to(device_obj)
         
         # Run LAMF
